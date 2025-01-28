@@ -8,46 +8,40 @@
 
 int main() 
 {
-    // STAVI MPI_INIT NA POCETAK!
-
-    srand(time(NULL));
-    
-    int A[DIM], B[DIM];
-
-    for (int i = 0; i < DIM; i++) 
-    {
-        A[i] = rand() % MAX_NUM;  
-        B[i] = rand() % MAX_NUM;  
-    }
-    
-    FILE *fileA = fopen("vector_A.txt", "w");
-    if (fileA == NULL) 
-    {
-        printf("Error opening file for Vector A!\n");
-        return 1;
-    }
-    for (int i = 0; i < DIM; i++) 
-    {
-        fprintf(fileA, "%d\n", A[i]);
-    }
-    fclose(fileA);
-
-    FILE *fileB = fopen("vector_B.txt", "w");
-    if (fileB == NULL) {
-        printf("Error opening file for Vector B!\n");
-        return 1;
-    }
-    for (int i = 0; i < DIM; i++) 
-    {
-        fprintf(fileB, "%d\n", B[i]);
-    }
-    fclose(fileB);
-    
-    int csize , prank ;
+  
     MPI_Init (NULL, NULL);
+    int csize , prank ;
     MPI_Comm_size ( MPI_COMM_WORLD , &csize );
     MPI_Comm_rank ( MPI_COMM_WORLD , &prank );
-
+    
+    int A[DIM], B[DIM];
+    if (prank==0)
+    {
+      srand(time(NULL));
+      for (int i = 0; i < DIM; ++i) 
+      {
+          A[i] = rand() % MAX_NUM;  
+          B[i] = rand() % MAX_NUM;  
+      }
+      FILE *fileA = fopen("vector_A.txt", "w");
+      FILE *fileB = fopen("vector_B.txt", "w");
+      if (fileA == NULL || fileB == NULL) 
+      {
+          printf("Error opening file.\n");
+          return 1;
+      }
+      for (int i = 0; i < DIM; ++i) 
+      {
+          fprintf(fileA, "%d\n", A[i]);
+          fprintf(fileB, "%d\n", B[i]);
+      }
+      fclose(fileA);
+      fclose(fileB);
+    }
+    
+    MPI_Bcast (A , DIM , MPI_INT , 0 , MPI_COMM_WORLD );
+    MPI_Bcast (B , DIM , MPI_INT , 0 , MPI_COMM_WORLD );
+    
     double s = MPI_Wtime ();
     int result = 0;
     /*
