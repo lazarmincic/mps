@@ -2,9 +2,7 @@
 #include <mpi.h>
 #include <math.h>
 
-// n mora biti vise od 1
-
-// deli na tri slucaja a ne na dva kao sada
+// dimenzije matrice moraju biti vece od broja procesa (ZA SADA)
 
 int returnSize ( char * fname )
 {
@@ -48,7 +46,6 @@ void logRes ( const char * fname , double * res , int n )
   fclose ( f );
 }
 
-
 int main ( int argc , char * argv [])
 {
   int csize ;
@@ -74,26 +71,76 @@ int main ( int argc , char * argv [])
   MPI_Bcast ( vec , dim , MPI_DOUBLE , 0 , MPI_COMM_WORLD );
   if ( prank == 0)
     tmat = loadMat ( mfname , dim );
-  int msize = dim ;
-  /*
-  if (prank!=csize-1)
-    mat = new double [ msize ];
+  bool nesim = true;
+  if (dim * dim % csize == 0) // deljivo
+    nesim = false;
+  int msize;
+  int faktor = int (round(double(dim)/double(csize))); // zaokr na prvu najvecu
+  if (dim<csize)
+    faktor = 1;
+  msize =  faktor * dim; 
+  int visak_redova = 0;
+  visak_redova = (dim-faktor*(csize-1));
+  if (visak_redova<0) 
+    visak_redova = 0;
+  int recvcount = 0;
+  if (nesim)
+  {
+    if (prank==csize-1)
+    {
+      recvcount = visak_redova*dim;
+      if (dim % faktor == 0 && dim / faktor<csize)
+      recvcount = 0;
+    }
+    else 
+      recvcount = faktor * dim;
+    if (dim<csize)
+    {
+      if (prank<dim)
+        recvcount = dim; //faktor je 1
+      else 
+        recvcount = 0; 
+    }
+  }
   else
-  */
-    mat = new double [ msize * 2 ];
+  {
+    recvcount = faktor * dim;
+  }
+  mat = new double [ recvcount ];
   int sendcounts[csize];
   int displs[csize];
-  
-  
-  if (csize<=dim)
-    for (int i = 0; i<csize; ++i)  // radi samo ako je csize<=dim
+  if (prank==0)
+  {
+    for (int i = 0; i<csize; ++i)  // radi samo ako je csize<=dim dim%csize!=0
     {
-      displs[i] = dim*i;  
-      if (i!=csize-1)
-        sendcounts[i] = dim;
-      else
-        sendcounts[i] = dim*2;
+       displs[i] = msize*i; 
+       if (msize*i>=dim*dim)
+         displs[i] = 0;
+       if (!nesim || i!=csize-1)
+         sendcounts[i] = msize;
     }
+    if (nesim)
+    {
+      sendcounts[csize-1] = visak_redova*dim;
+    }
+    if (dim<csize)
+    {
+      for (int i = 0; i<csize;++i)
+      {
+        if (i<dim)
+        {
+          sendcounts[i]=dim; //1
+          displs[i] = i*dim;
+        }
+        else
+        {
+          sendcounts[i]=0;
+          displs[i] = 0;
+        }
+      }
+    }
+  }
+   /*
   else
     for (int i = 0; i<csize; ++i)  
     {
@@ -107,9 +154,11 @@ int main ( int argc , char * argv [])
         displs[i] = 0;  
         sendcounts[i] = 0;
       }
-    }
+    } */
   
-  MPI_Scatterv ( tmat , sendcounts , displs , MPI_DOUBLE , mat , msize * 2 , MPI_DOUBLE , 0 , MPI_COMM_WORLD );
+  MPI_Scatterv ( tmat , sendcounts , displs , MPI_DOUBLE , mat , recvcount , MPI_DOUBLE , 0 , MPI_COMM_WORLD );
+
+  
   /*     
   for (int i = 0; i<csize; ++i) //debug
     for (int j = 0; j<msize*2; ++j)
@@ -119,18 +168,29 @@ int main ( int argc , char * argv [])
     }
   */
   int to ;  
-  if (prank!=csize-1 || csize>dim) 
+  if (nesim)
   {
-    to = 1;
-    lres = new double [ dim ];
+    if (prank==csize-1 ) 
+    {
+      to = visak_redova;
+    }
+    else
+    {
+      to = faktor;
+    }
+    if (dim<csize)
+    {
+      if (prank<dim)
+        to = 1;
+      else 
+        to = 0;
+    }
   }
-  else 
+  else
   {
-    to = 2;
-    lres = new double [ 2*dim ];
+    to = dim / csize ;
   }
-  
-  
+  lres = new double [ to ];
   for ( int i = 0; i != to ; ++ i )
   {
     double s = 0;
@@ -138,19 +198,40 @@ int main ( int argc , char * argv [])
       s += mat [ i * dim + j ] * vec [ j ];
     lres [ i ] = s ;
   }
+  
   int recvcounts[csize], displs_g[csize];
   if ( prank == 0)
   {
     res = new double [ dim ];
-    if (csize<=dim)
+    for (int i =0; i<csize;++i)
+    {
+      displs_g[i]=i*faktor;
+      if (i*faktor>=dim)
+        displs_g[i]=0;
+      if (!nesim || i!=csize-1)
+      recvcounts[i]=faktor;
+    }
+    if (nesim)
+      recvcounts[csize-1]=visak_redova;
+    if (dim<csize)
+    {
       for (int i =0; i<csize;++i)
       {
-        displs_g[i]=i;
-        if (i!=csize-1)
+        if (i<dim)
+        {
           recvcounts[i]=1;
+          displs_g[i]=i;
+        }
         else
-          recvcounts[i]=2;
+        {
+          recvcounts[i]=0;
+          displs_g[i]=0;
+        }
       }
+    }
+  }
+    
+      /*
     else
       for (int i =0; i<csize;++i)
       {
@@ -165,9 +246,8 @@ int main ( int argc , char * argv [])
           recvcounts[i]=0;
         }
       }
-    
-  }
-  MPI_Gatherv ( lres , to , MPI_DOUBLE , res , recvcounts, displs_g , MPI_DOUBLE , 0 , MPI_COMM_WORLD );
+    */
+  MPI_Gatherv ( lres , to , MPI_DOUBLE , res , recvcounts, displs_g , MPI_DOUBLE , 0 , MPI_COMM_WORLD ); 
   if ( prank == 0) 
   {
     logRes ( "res.txt" , res , dim );
@@ -180,7 +260,6 @@ int main ( int argc , char * argv [])
   delete [] vec ;
   delete [] mat ;
   delete [] lres ;
-  
   MPI_Finalize ();
   return 0;
   
