@@ -1,0 +1,12 @@
+try_lock: lr t0, 0(x0)
+bne t0, x0, try_lock       
+addi t1, x0, 1
+sc    t1, t1, 0(x0)   
+bne t1, x0, try_lock     
+
+addi    t0, x0, 1
+ld      t1, 0(t0)          
+addi    t1, t1, 1         
+st      t1, 0(t0)          
+
+st x0, 0(x0) 
