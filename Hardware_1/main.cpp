@@ -5,6 +5,7 @@
 #include "Parser.hpp"
 #include "MemoryController.hpp"
 
+void progIspis (ExecutableProgram prog);
 
 // main pokreće jedan korak simulacije
 int main() {
@@ -34,8 +35,31 @@ int main() {
 
     // učitavanje programa u programsku memoriju odgovarajućeg procesora
     ExecutableProgram prog = Parser::parseFile("input.txt");
-
     // Debug ispis
+    progIspis(prog);
+
+    // isti program se izvršava na tri ista procesora (ne mora tako)
+    cpu0.load(prog);
+    cpu1.load(prog);
+    cpu2.load(prog);
+
+    // simulacija
+    while (true){
+        // keš hit - kraj, nema interakcije sa magistralom
+        // keš mis - šalje se signal na magistralu
+        cpu0.step();
+        cpu1.step();
+        cpu2.step();
+
+        bus.step();  // Snooping i sintetizovanje C signala
+    }
+
+    return 0;
+}
+
+
+void progIspis (ExecutableProgram prog) {
+        // Debug ispis
     std::cout << "Parsovano " << prog.instructions.size() << " instrukcija\n\n";
     
     for (size_t i = 0; i < prog.instructions.size(); i++) {
@@ -69,31 +93,4 @@ int main() {
         std::cout << "  " << labelName << " -> instrukcija " << instrIdx << "\n";
     }
 
-    // isti program se izvršava na tri ista procesora (ne mora tako)
-    cpu0.load(prog);
-    cpu1.load(prog);
-    cpu2.load(prog);
-
-    while (true){
-        // keš hit - kraj, nema interakcije sa magistralom
-        // keš mis - šalje se signal na magistralu
-        cpu0.step();
-        cpu1.step();
-        cpu2.step();
-
-        // Bus snooping - svi keš kontroleri slušaju magistralu
-        cc0.onBusSignal(bus.getCurrentSignal());
-        cc1.onBusSignal(bus.getCurrentSignal());
-        cc2.onBusSignal(bus.getCurrentSignal());
-        
-        // Bus faza
-        bool copiesExist = false;
-
-
-        bus.step();  // Snooping i sintetizovanje C signala
-    }
-
-    return 0;
-}
-
-
+ }

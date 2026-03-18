@@ -39,6 +39,9 @@ private:
     std::queue<int> waitQueue;
     int currentOwner;
     BusPhase currentPhase;
+
+    CacheController* cacheControllers[3];
+    MemoryController* memoryController;
     
 public:
     Bus();
@@ -54,12 +57,15 @@ public:
     void registerCacheController(int cpuID, CacheController* cc);
 
     void step();
+
+    int32_t readMiss(uint32_t address, int cpuID) ;
     
 private:
     void grantBus();
     void broadcastRequest();
     void collectResponses();
     void releaseBus();
+    bool hasLineInOtherCaches(uint32_t address, int cpuID);
 };
 
 #endif

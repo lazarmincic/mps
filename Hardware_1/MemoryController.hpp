@@ -2,16 +2,24 @@
 #define MEMORYCONTROLLER_HPP
 
 #include "Bus.hpp"
+#include <map>
 
 class Bus ;
 
 class MemoryController {
-public:
-    MemoryController();
-    void setBus(Bus* b);
 private:
     Bus* bus;
-    int32_t memory[128]; // 128 reči od po 32 bita
+    std::map<uint32_t, int32_t> memory; 
+
+public:
+
+    MemoryController();
+    void setBus(Bus* b);
+
+    int32_t read(uint32_t address);
+    
+    void write(uint32_t address, int32_t data);
+
 };
 
 #endif

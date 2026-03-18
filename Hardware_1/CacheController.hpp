@@ -57,6 +57,8 @@ struct CacheLine {
     CacheLine() : state(), data(0), tag(0), index(0), offset(0) {}  // keš kreće "hladan"
 };
 
+struct BusSignal;
+
 class CacheController {  
 private:
     CacheLine cache[2]; 

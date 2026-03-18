@@ -18,13 +18,9 @@ int32_t CacheController::read(uint32_t address) {
     // 3. MISS - nema linije u kešu
     std::cout << "[" << myID << "] CACHE MISS @ 0x" << std::hex << address << std::dec << "\n";
 
-    // učitavanje iz memorije todo
-    BusSignal readRequest;
-    readRequest.type = BusTransaction::READ;
-    readRequest.address = address;
-    readRequest.initiatorCPU = myID;
-    bus->emit(readRequest);
-    return 0; // todo, različita povratna vrednost za hit miss
+    // učitavanje iz memorije, magistrala će vratiti podatak
+    return bus->readMiss(address, myID);
+    
 }
 
 void CacheController::write(uint32_t address, int32_t data) {
@@ -68,4 +64,8 @@ int CacheController::findLineInCache(uint32_t address) {
         }
     }
     return -1;  // Nema linije
+}
+
+bool CacheController::hasLine(uint32_t address) {
+    return findLineInCache(address) != -1;
 }
