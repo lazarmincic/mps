@@ -107,3 +107,8 @@ int CPU::findLabelIndex(std::string name) {
 }
 
 
+void CPU::setName(std::string name) { 
+    cpuName = name; }
+
+void CPU::setCacheController(CacheController* cc) { 
+    cacheController = cc; }

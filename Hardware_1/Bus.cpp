@@ -61,5 +61,7 @@ void Bus::releaseBus() {
     currentPhase = BusPhase::ARBITRATION;
 }
 
-
+void Bus::registerMemoryController(MemoryController* mc){
+    
+}
 

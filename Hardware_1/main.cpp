@@ -1,20 +1,37 @@
-#include "Board.hpp"
 #include <iostream>
+#include "CPU.hpp"
+#include "CacheController.hpp"
+#include "Bus.hpp"
+#include "Parser.hpp"
+#include "MemoryController.hpp"
 
-Board::Board() : cc0(0), cc1(1), cc2(2), p0(&cc0), p1(&cc1), p2(&cc2) {
-    // Konekcija sa magistralom
+
+// main pokreće jedan korak simulacije
+int main() {
+    Bus bus;
+    MemoryController mc;
+
+    // Kreiraj sve komponente
+    CacheController cc0(0), cc1(1), cc2(2);
+    CPU cpu0(&cc0), cpu1(&cc1), cpu2(&cc2);
+
+    // Poveži sve
+    bus.registerMemoryController(&mc);
+    bus.registerCacheController(0, &cc0);
+    bus.registerCacheController(1, &cc1);
+    bus.registerCacheController(2, &cc2);
+
+    // CPU ima direktan pristup svom CC
+    cpu0.setCacheController(&cc0);
+    cpu1.setCacheController(&cc1);
+    cpu2.setCacheController(&cc2);
+    
+    // CC ima pristup Bus-u
     cc0.setBus(&bus);
     cc1.setBus(&bus);
     cc2.setBus(&bus);
 
-    // Setuj imena procesora
-    p0.setName("Core0");
-    p1.setName("Core1");
-    p2.setName("Core2");
-}
 
-// Funkcija koja pokreće jedan korak simulacije
-void Board::step (){
     // učitavanje programa u programsku memoriju odgovarajućeg procesora
     ExecutableProgram prog = Parser::parseFile("input.txt");
 
@@ -53,28 +70,29 @@ void Board::step (){
     }
 
     // isti program se izvršava na tri ista procesora (ne mora tako)
-    p0.load(prog);
-    p1.load(prog);
-    p2.load(prog);
+    cpu0.load(prog);
+    cpu1.load(prog);
+    cpu2.load(prog);
 
-    // keš hit - kraj, nema interakcije sa magistralom
-    // keš mis - šalje se signal na magistralu
-    p0.step();
-    p1.step();
-    p2.step();
-    
-    // Bus snooping - svi keš kontroleri slušaju magistralu
-    cc0.onBusSignal(bus.getCurrentSignal());
-    cc1.onBusSignal(bus.getCurrentSignal());
-    cc2.onBusSignal(bus.getCurrentSignal());
-    
-    // Bus faza
-    bool copiesExist = false;
-}
+    while (true){
+        // keš hit - kraj, nema interakcije sa magistralom
+        // keš mis - šalje se signal na magistralu
+        cpu0.step();
+        cpu1.step();
+        cpu2.step();
 
-int main() {
-    Board board;
-    board.step();
+        // Bus snooping - svi keš kontroleri slušaju magistralu
+        cc0.onBusSignal(bus.getCurrentSignal());
+        cc1.onBusSignal(bus.getCurrentSignal());
+        cc2.onBusSignal(bus.getCurrentSignal());
+        
+        // Bus faza
+        bool copiesExist = false;
+
+
+        bus.step();  // Snooping i sintetizovanje C signala
+    }
+
     return 0;
 }
 

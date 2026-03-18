@@ -5,6 +5,8 @@
 #include <iostream>
 #include "Bus.hpp"
 
+class Bus;
+
 // Enum za MESI stanja keš linije
 enum class CacheState { M, E, S, I };
 

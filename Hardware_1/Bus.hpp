@@ -4,6 +4,12 @@
 #include <cstdint>
 #include <iostream>
 #include <queue>
+#include "MemoryController.hpp"
+#include "CacheController.hpp"
+
+class CacheController;
+
+class MemoryController;
 
 enum class BusTransaction { READ, WRITE, UPGRADE };
 
@@ -44,6 +50,8 @@ public:
     bool isBusFree() const { return !isBusy; }
     int getCurrentOwner() const { return currentOwner; }
     
+    void registerMemoryController(MemoryController* mc);
+    void registerCacheController(int cpuID, CacheController* cc);
 
     void step();
     

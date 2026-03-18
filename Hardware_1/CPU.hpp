@@ -8,6 +8,8 @@
 #include "CacheController.hpp"
 #include "Parser.hpp"
 
+class CacheController;
+
 class CPU {
 private:
     uint32_t pc;
@@ -35,7 +37,9 @@ public:
 
     void step();
 
-    void setName(std::string name) { cpuName = name; }
+    void setName(std::string name);
+
+    void setCacheController(CacheController* cc);
 
 private:
     int findLabelIndex(std::string name);

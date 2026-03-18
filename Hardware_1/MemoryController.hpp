@@ -3,6 +3,8 @@
 
 #include "Bus.hpp"
 
+class Bus ;
+
 class MemoryController {
 public:
     MemoryController();
