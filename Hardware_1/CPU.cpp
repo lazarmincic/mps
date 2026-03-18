@@ -1,6 +1,4 @@
-#include <vector>
-#include <map>
-#include <fstream>
+
 
 #include "CPU.hpp"
 
@@ -13,79 +11,99 @@
 // 3. ostale (npr. aritmetika) - na visokom nivou
 
 
-Instruction InstructionMemory::fetch(uint32_t address) {
-    // Pomeranje za 2 bita udesno je identično ignorisanju žica A0 i A1
-    // neophodno jer je instrukciona memorija bajt asesiblna
-    return storage[address >> 2]; // aproksimacija adresnog dekodera
+CPU::CPU(CacheController* cc) : cacheController(cc), pc(0),load_reservation_address(0),reservation_active(false) {
 }
-void InstructionMemory::load(uint32_t address, uint32_t binaryValue) {
-    storage[address >> 2].raw = binaryValue;  // ovom metodom moguće je učitati program u programsku memoriju.
-}
-
-uint32_t ProgramCounter::read() { return address; } // Izlazni pin
-void ProgramCounter::write(uint32_t nextAddress) { address = nextAddress; } // Ulazni pin
-
-
-uint32_t Adder::add(uint32_t op1, uint32_t op2) {
-    return op1 + op2;
-}
-
-
-RegisterBank::RegisterBank() // inicijalizacija svih registara na nulu
-{
-    for (int i = 0; i < 32; i++) 
-        registers[i] = 0;
-}
-
-uint8_t RegisterBank::rs1_data(uint8_t rs1_address)
-{
-    if (rs1_address == 0) return 0; // x0 je uvek 0
-    return registers[rs1_address];
-}
-
-uint8_t RegisterBank::rs2_data(uint8_t rs2_address)
-{
-    if (rs2_address == 0) return 0; // x0 je uvek 0
-    return registers[rs2_address];
-}
-
-void RegisterBank::write(uint8_t rd_address, uint8_t rd_data, uint8_t rd_we) 
-{
-    if (rd_we != 1) return;
-    if (rd_address == 0) return; // x0 se ne menja
-    registers[rd_address] = rd_data;
-}
-
-
-CPU::CPU(CacheController* cc) : cacheController(cc) {}
 
 // tick - jedan cilkus takta
-// data-path su klase, control-path se modeluje unutar CPU::tick()
 
-void CPU::tick () {
+void CPU::execute(Instruction& instr) {
+    // Pomoćna lambda funkcija za dobijanje vrednosti iz registra po imenu
+    auto getReg = [&](std::string r) { return (r == "x0") ? 0 : registers[r]; };
 
-    // 1. FETCH
-    uint32_t currentAddr = pc.read();
-    Instruction currentInstr = instrMem.fetch(currentAddr);
-
-    // 2. DECODE & EXECUTE
-    switch(currentInstr.r_type.opcode) {
-
-        case 0x13: // I-type
-
-        case 0x63: // B-type
-
-        case 0x23: // S-type
-
-        case 0x2F: // R-type (atomične operacije)
-        {}
-
+    if (instr.mnemonic == "addi") {
+        // addi rd, rs1, imm
+        registers[instr.rd] = getReg(instr.rs1) + instr.imm;
+        pc++; // Prelazimo na sledeću instrukciju u vektoru
+    }
+    
+    else if (instr.mnemonic == "lr") {
+        // lr rd, 0(rs1) -> Load Reserved
+        uint32_t adresa = getReg(instr.rs1) + instr.imm;
+        registers[instr.rd] = cacheController->read(adresa);
+        
+        // Postavljamo rezervaciju za ovu adresu
+        load_reservation_address = adresa;
+        reservation_active = true;
+        
+        std::cout << "[" << cpuName << "] [LR] Rezervacija postavljena na adresu: " << adresa << std::endl;
+        pc++;
     }
 
-    // 3. PC UPDATE
-    uint32_t nextAddr = pcAdder.add(currentAddr, 4);
-    pc.write(nextAddr);
+    else if (instr.mnemonic == "sc") {
+        // sc rd, rs2, 0(rs1) -> Store Conditional
+        uint32_t adresa = getReg(instr.rs1) + instr.imm;
+        
+        if (reservation_active && load_reservation_address == adresa) {
+            // Uspeh: upisujemo vrednost i u rd stavljamo 0
+            cacheController->write(adresa, getReg(instr.rs2));
+            registers[instr.rd] = 0;
+            reservation_active = false; // Rezervacija se troši
+            std::cout << "[" << cpuName << "] [SC] Uspeh! Vrednost upisana." << std::endl;
+        } else {
+            // Neuspeh: ne upisujemo ništa, u rd stavljamo 1 (error)
+            registers[instr.rd] = 1;
+            std::cout << "[" << cpuName << "] [SC] Neuspeh! Rezervacija nevažeća." << std::endl;
+        }
+        pc++;
+    }
 
+    else if (instr.mnemonic == "bne") {
+        // bne rs1, rs2, label
+        if (getReg(instr.rs1) != getReg(instr.rs2)) {
+            // Skok na labelu (ovde koristimo pomoćnu funkciju za nalaženje indeksa labele)
+            pc = findLabelIndex(instr.label);
+            std::cout << "[" << cpuName << "] [BNE] Skok na " << instr.label << " (PC postavljen na " << pc << ")" << std::endl;
+        } else {
+            pc++;
+        }
+    }
+
+    else if (instr.mnemonic == "ld" || instr.mnemonic == "lw") {
+        // ld rd, 0(rs1) -> Obično čitanje
+        uint32_t adresa = getReg(instr.rs1) + instr.imm;
+        registers[instr.rd] = cacheController->read(adresa);
+        pc++;
+    }
+
+    else if (instr.mnemonic == "st" || instr.mnemonic == "sw") {
+        // st rs2, 0(rs1) -> Običan upis
+        uint32_t adresa = getReg(instr.rs1) + instr.imm;
+        cacheController->write(adresa, getReg(instr.rs2));
+        
+        // Bitno: Bilo koji "običan" Store na rezervisanu adresu od strane drugog CPU-a
+        // bi trebalo da poništi rezervaciju, ali ovde simuliramo samo lokalni CPU.
+        pc++;
+    }
+}
+
+void CPU::step() {
+    if (pc < program.size()) {
+        execute(program[pc]);
+    } else {
+        std::cout << "[" << cpuName << "] Program završen.\n";
+    }
+}
+
+void CPU::load(ExecutableProgram p) {
+    this->program = p.instructions;
+    this->labelMap = p.labelMap; // CPU sada ima spremnu mapu!
+    this->pc = 0;
+}
+
+int CPU::findLabelIndex(std::string name) {
+    // Samo pogleda u mapu koju je Parser već popunio
+    if (labelMap.count(name)) return labelMap[name];
+    return -1; 
 }
 
 

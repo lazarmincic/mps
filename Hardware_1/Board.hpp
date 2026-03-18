@@ -3,16 +3,18 @@
 
 #include "CPU.hpp"
 #include "CacheController.hpp"
-#include "Asembler.hpp"
+#include "Bus.hpp"
+#include "Parser.hpp"
 
 class Board {
 private:
-    CacheController cacheController;
-    CPU cpu;
-public: 
-    Board();
+    Bus bus;
+    CacheController cc0, cc1, cc2;
+    CPU p0, p1, p2;
 
-    void step ();
+public:
+    Board();
+    void step();
 };
 
 #endif

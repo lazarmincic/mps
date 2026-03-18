@@ -27,7 +27,7 @@
             "args": [
                 "-fdiagnostics-color=always",
                 "-g",
-                "Board.cpp", "CacheController.cpp", "Asembler.cpp", "CPU.cpp",// Ručno nabroj fajlove
+                "Board.cpp", "CacheController.cpp", "Parser.cpp", "CPU.cpp",// Ručno nabroj fajlove
                 "-o",
                 "Board",
                 "-I", "."
@@ -48,7 +48,7 @@
             "args": [
                 "-fdiagnostics-color=always",
                 "-g",
-                "Board.cpp", "CacheController.cpp", "Asembler.cpp","CPU.cpp", // Ručno nabroj fajlove
+                "Board.cpp", "CacheController.cpp", "Parser.cpp","CPU.cpp", // Ručno nabroj fajlove
                 "-o",
                 "Board",
                 "-I", "."

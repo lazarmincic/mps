@@ -1,0 +1,4 @@
+*.o
+simulator
+CPU
+.vscode/
