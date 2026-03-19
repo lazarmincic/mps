@@ -74,9 +74,9 @@ void Bus::releaseBus()
     currentPhase = BusPhase::ARBITRATION;
 }
 
-void Bus::registerMemoryController(MemoryController *mc)
+void Bus::registerMemoryController(MemoryController *memContr)
 {
-    memoryController = mc;
+    memoryController = memContr;
 }
 
 int32_t Bus::readMiss(uint32_t address, int cpuID)
@@ -119,7 +119,7 @@ bool Bus::hasLineInOtherCaches(uint32_t address, int cpuID)
     return false; // C = LOW
 }
 
-void Bus::registerCacheController(int cpuID, CacheController *cc)
+void Bus::registerCacheController(int cpuID, CacheController *cacheContr)
 {
-    cacheControllers[cpuID] = cc;
+    cacheControllers[cpuID] = cacheContr;
 }

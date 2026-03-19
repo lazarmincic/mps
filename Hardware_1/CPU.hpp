@@ -10,7 +10,8 @@
 
 class CacheController;
 
-class CPU {
+class CPU
+{
 private:
     uint32_t pc;
     // Ključ je ime registra (npr. "t0", "x1"), a vrednost je 32-bitni podatak
@@ -18,31 +19,29 @@ private:
     uint32_t load_reservation_address;
     bool reservation_active;
 
-// spoljne komponente (pokazivači - "povezani kablovima")
-    CacheController* cacheController; // CPU ima pristup svom kontroleru
+    // spoljne komponente (pokazivači - "povezani kablovima")
+    CacheController *cacheController; // CPU ima pristup svom kontroleru
 
-    
     std::vector<Instruction> program;
     std::map<std::string, int> labelMap;
 
     std::string cpuName;
 
-
 public:
-    CPU(CacheController* cc);
+    CPU(CacheController *cacheContr);
 
-    void execute(Instruction& instr);
+    void execute(Instruction &instr);
 
-    void load(ExecutableProgram p);
+    void load(const ExecutableProgram &prog);
 
     void step();
 
-    void setName(std::string name);
+    void setName(const std::string &name);
 
-    void setCacheController(CacheController* cc);
+    void setCacheController(CacheController *cacheContr);
 
 private:
-    int findLabelIndex(std::string name);
+    int findLabelIndex(const std::string &name);
 };
 
 #endif

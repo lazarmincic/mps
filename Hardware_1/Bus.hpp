@@ -11,17 +11,29 @@ class CacheController;
 
 class MemoryController;
 
-enum class BusTransaction { READ, WRITE, UPGRADE };
+enum class BusTransaction : uint8_t
+{
+    READ,
+    WRITE,
+    UPGRADE
+};
 
-enum class BusPhase { ARBITRATION, REQUEST, RESPONSE, COMPLETION };
+enum class BusPhase : uint8_t
+{
+    ARBITRATION,
+    REQUEST,
+    RESPONSE,
+    COMPLETION
+};
 
-struct BusSignal {
+struct BusSignal
+{
     BusTransaction type;
     uint32_t address;
     int32_t data;
     int initiatorCPU;
 
-    bool copiesExist; 
+    bool copiesExist;
     bool hasData;
 
     bool hitInCache;
@@ -31,7 +43,8 @@ struct BusSignal {
     bool abort;
 };
 
-class Bus {
+class Bus
+{
 private:
     BusSignal currentSignal;
     bool isBusy;
@@ -40,26 +53,26 @@ private:
     int currentOwner;
     BusPhase currentPhase;
 
-    CacheController* cacheControllers[3];
-    MemoryController* memoryController;
-    
+    CacheController *cacheControllers[3];
+    MemoryController *memoryController;
+
 public:
     Bus();
-    
+
     void requestBus(int cpuID);
     void emit(BusSignal sig);
-    
-    const BusSignal& getCurrentSignal() const { return currentSignal; }
+
+    const BusSignal &getCurrentSignal() const { return currentSignal; }
     bool isBusFree() const { return !isBusy; }
     int getCurrentOwner() const { return currentOwner; }
-    
-    void registerMemoryController(MemoryController* mc);
-    void registerCacheController(int cpuID, CacheController* cc);
+
+    void registerMemoryController(MemoryController *memContr);
+    void registerCacheController(int cpuID, CacheController *cacheContr);
 
     void step();
 
-    int32_t readMiss(uint32_t address, int cpuID) ;
-    
+    int32_t readMiss(uint32_t address, int cpuID);
+
 private:
     void grantBus();
     void broadcastRequest();

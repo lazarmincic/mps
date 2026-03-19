@@ -9,7 +9,7 @@
 #include <sstream>
 #include <algorithm>
 
-enum class InstructionType
+enum class InstructionType : uint8_t
 {
     R,
     I,
@@ -44,10 +44,10 @@ struct ExecutableProgram
 class Parser
 {
 public:
-    static ExecutableProgram parseFile(std::string filename);
+    static ExecutableProgram parseFile(const std::string &filename);
 
 private:
-    static void parseMemoryOperand(std::string op, int32_t &imm, std::string &reg);
+    static void parseMemoryOperand(const std::string &operand, int32_t &imm, std::string &reg);
 };
 
 #endif
