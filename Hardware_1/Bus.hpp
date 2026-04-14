@@ -1,84 +1,62 @@
 #ifndef BUS_HPP
 #define BUS_HPP
 
-#include <cstdint>
-#include <iostream>
-#include <queue>
 #include "MemoryController.hpp"
 #include "CacheController.hpp"
+#include "Common.hpp"
 
 class CacheController;
 
 class MemoryController;
 
-enum class BusTransaction : uint8_t
-{
-    READ,
-    WRITE,
-    UPGRADE
-};
-
-enum class BusPhase : uint8_t
-{
-    ARBITRATION,
-    REQUEST,
-    RESPONSE,
-    COMPLETION
-};
-
-struct BusSignal
-{
-    BusTransaction type;
-    uint32_t address;
-    int32_t data;
-    int initiatorCPU;
-
-    bool copiesExist;
-    bool hasData;
-
-    bool hitInCache;
-    bool shared;
-    int32_t responseData;
-    bool dataValid;
-    bool abort;
-};
-
 class Bus
 {
 private:
-    BusSignal currentSignal;
+    std::map<Controller, BusSignal> activeSignals;
+    Controller lastWinner;
     bool isBusy;
-    int cycleCount;
-    std::queue<int> waitQueue;
-    int currentOwner;
-    BusPhase currentPhase;
+    Controller currentOwner;
+
+    BusSignal currentSignal;
+    bool sharedLine;
 
     CacheController *cacheControllers[3];
     MemoryController *memoryController;
 
+    bool canCollect;
+
 public:
     Bus();
-
-    void requestBus(int cpuID);
-    void emit(BusSignal sig);
-
-    const BusSignal &getCurrentSignal() const { return currentSignal; }
-    bool isBusFree() const { return !isBusy; }
-    int getCurrentOwner() const { return currentOwner; }
 
     void registerMemoryController(MemoryController *memContr);
     void registerCacheController(int cpuID, CacheController *cacheContr);
 
-    void step();
+    void requestBus(Controller devicePosting, const BusSignal &signal);
 
-    int32_t readMiss(uint32_t address, int cpuID);
+    void pullSharedLine();
+
+    const BusSignal &getCurrentSignal() const;
+    bool isBusFree() const;
+    Controller getCurrentOwner() const;
+    bool sharedLineActive() const;
+    void resetSharedLine();
+
+    void tick();
+
+    void putDataOnBus(const BusSignal &response);
+    void acknowledgeResponse();
+
+    void dropBusRequest(Controller controller);
+
+    void flush(Data data);
+
+    bool isAcknowledge();
 
 private:
     void grantBus();
     void broadcastRequest();
     void collectResponses();
     void releaseBus();
-    bool hasLineInOtherCaches(uint32_t address, int cpuID);
 };
 
 #endif

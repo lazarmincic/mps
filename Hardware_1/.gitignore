@@ -1,4 +1,6 @@
 *.o
+*.d
 .vscode/
 simulator
 .clang-tidy
+/old

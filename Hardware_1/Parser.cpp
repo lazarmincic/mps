@@ -1,13 +1,21 @@
-// ova klasa transformiše pseudoinstrukcije u instrukcije koje riscv procesor može da razume
+// ova klasa transformiše pseudoinstrukcije u instrukcije koje riscv procesor može da razume (mašinske instrukcije)
 // ta konverzija se naziva ekspanzija pseudoinstrukcija
-// dobija se mašinski kod koji se preko instruction loader-a učitava u programsku memoriju procesora
-// ja ću se zadržati na nivou teksta, tako će kod biti razumljiviji.. - I DALJE NE ZNAM
+// dobijaju se mašinske instrukcije koji se preko instruction loader-a učitava u programsku memoriju procesora (klasa CPU)
+// ja ću se zadržati na nivou teksta (umesto mašinskog koda, tj nula i jedinica), tako će kod biti razumljiviji i lakši za debug
 
 #include "Parser.hpp"
 
 ExecutableProgram Parser::parseFile(const std::string &filename)
 {
+    /*
+    Uzima path do ulaznog tekstualnog fajla sa pseudoinstrukcijama
+    Izlaz su instrukcije učitane u strukturu ExecutableProgram, koju klasa CPU direktno može da povuče i izvrši
+    */
+    std::cout << "Parsiram datoteku " << filename << "\n";
     ExecutableProgram prog;
+    fs::path p = filename;
+    prog.programName = p.stem().string(); // bez ekstenzije
+
     std::ifstream file(filename);
     std::string line;
     int currentInstructionIndex = 0;
@@ -51,7 +59,7 @@ ExecutableProgram Parser::parseFile(const std::string &filename)
         if (instr.mnemonic == "addi")
         {
             instr.type = InstructionType::I;
-            sstream >> instr.rd >> instr.rs1 >> instr.imm;
+            sstream >> instr.rd >> instr.rs1 >> instr.imm.val;
         }
         else if (instr.mnemonic == "ld")
         {
@@ -98,13 +106,17 @@ ExecutableProgram Parser::parseFile(const std::string &filename)
     return prog;
 }
 
-void Parser::parseMemoryOperand(const std::string &operand, int32_t &imm, std::string &reg)
+void Parser::parseMemoryOperand(const std::string &operand, Data &imm, std::string &reg)
+/*
+Pomoćna privatna metoda za parsiranje memorijskih instrukcija
+*/
 {
+
     size_t openBracket = operand.find('(');
     size_t closeBracket = operand.find(')');
     if (openBracket != std::string::npos && closeBracket != std::string::npos)
     {
-        imm = std::stoi(operand.substr(0, openBracket));
+        imm = {std::stoi(operand.substr(0, openBracket))};
         reg = operand.substr(openBracket + 1, closeBracket - openBracket - 1);
     }
 }

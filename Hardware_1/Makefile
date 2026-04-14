@@ -1,17 +1,15 @@
-# 1. Promenljive - ovde definišeš kompajler i zastavice
+# 1. Promenljive - kompajler, flegovi
 CXX = g++
-CXXFLAGS = -Wall -Wextra -std=c++17 -I. # -I. kaže da traži headere u trenutnom folderu
-LDFLAGS =
+CXXFLAGS = -Wall -Wextra -g -std=c++17 -I. -MMD -MP # -I. kaže da traži headere u trenutnom folderu
+LDFLAGS = -g
 
-# 2. Ime tvog konačnog programa
+# 2. Ime konačnog programa
 TARGET = simulator
 
 # 3. Automatsko pronalaženje svih .cpp fajlova
-# Ovo će naći main.cpp, CPU.cpp, Cache.cpp, Bus.cpp itd.
 SRCS = $(wildcard *.cpp)
 
-# 4. Pretvaranje imena .cpp u .o (Object fajlovi)
-# npr. CPU.cpp postaje CPU.o
+# 4. Pretvaranje imena .cpp u .o (objektni fajlovi)
 OBJS = $(SRCS:.cpp=.o)
 
 # --- PRAVILA ---
@@ -24,9 +22,11 @@ $(TARGET): $(OBJS)
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Pravilo za čišćenje projekta (da obrišeš .o i simulator)
+# Pravilo za čišćenje projekta (briše sve .o fajlove, .d fajlove i izvšnu datoteku)
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f $(OBJS) $(TARGET) *.d
 
-# Pravilo za ponovno kompajliranje od nule
+# Pravilo za ponovno kompajliranje
 rebuild: clean $(TARGET)
+
+-include $(OBJS:.o=.d)
