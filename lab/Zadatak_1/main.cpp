@@ -31,7 +31,7 @@ int main(int argc, char* argv[]) {
     Dataset test_data = load_csv ("fashion-mnist_test.csv");
     if (test_data.n_samples == 0) return 1;
 
-    int max_batch_size = 1920; // batch slika u isto vreme
+    int max_batch_size = 480; // batch slika u isto vreme
     // treba da bude deljiv sa brojem procesa!
     std::cout << "Paralelno pokretanje obradjuje " << max_batch_size << " slika odjednom."<< std::endl;
     // Napravi mrežu
