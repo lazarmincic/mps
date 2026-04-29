@@ -2,10 +2,12 @@
 #include "mlp.hpp"
 #include "data_loader.hpp"
 #include <utility> // za std::pair
+#include <thread>
+#include <chrono>
 
 // Kontroliše ceo proces — od pokretanja do ispisa rezultata
 
-double izvrsi_trening(MLP& mreza, const Dataset& training_data, int epohe, bool parallel, const Dataset& test_data);
+double izvrsi_trening(MLP& mreza, Dataset& training_data, int epohe, bool parallel, Dataset& test_data, const int batch_size);
 std::pair<float, float> evaluate(MLP& network, const Dataset& data, bool calculate_loss_flag);
 
 int main(int argc, char* argv[]) {
@@ -24,13 +26,17 @@ int main(int argc, char* argv[]) {
 
     // Učitavanje podataka
     Dataset training_data = load_csv("fashion-mnist_train.csv");
-    if (training_data.images.empty()) return 1;
+    if (training_data.n_samples == 0) return 1;
 
     Dataset test_data = load_csv ("fashion-mnist_test.csv");
-    if (test_data.images.empty()) return 1;
+    if (test_data.n_samples == 0) return 1;
 
+    int max_batch_size = 512; // batch slika u isto vreme
+    // treba da bude deljiv sa brojem procesa!
+    std::cout << "Paralelno pokretanje obradjuje " << max_batch_size << " slika odjednom."<< std::endl;
     // Napravi mrežu
-    MLP mreza (num_hidden, hidden_dim);
+    // Inicijalizacija na početku (rezerviše 128 mesta)
+    MLP mreza (num_hidden, hidden_dim, max_batch_size);
 
     std::cout << "Koristim nasumicni seed za ovo pokretanje: " << mreza.get_seed() << std::endl;
 
@@ -40,11 +46,15 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Postavljen faktor ucenja: " << faktorUcenja << std::endl;
 
-    int broj_epoha = 3; // menjati po potrebi
+    int broj_epoha = 6; // menjati po potrebi
     std::cout << "Broj epoha ucenja: " << broj_epoha << std::endl;
 
+    // Testiram sekvencijalno
     bool isParallel = false;
-    double vreme_seq = izvrsi_trening(mreza, training_data, broj_epoha, isParallel, test_data);
+    mreza.batch_size = 1; // jedna po jedna slika
+    
+
+    double vreme_seq = izvrsi_trening(mreza, training_data, broj_epoha, isParallel, test_data, max_batch_size);
     vreme_seq = vreme_seq * broj_epoha; // ukupno trajanje treninga
 
     // Nakon što se štoperica zaustavi, proveravamo kvalitet mreže
@@ -57,11 +67,26 @@ int main(int argc, char* argv[]) {
     float test_acc = test_results.first;
 
     isParallel = true;
+    mreza.batch_size = max_batch_size; // vise slika istovremeno
 
     // oba testa kecu od istih pocetnih vrednosti
     mreza.inicijalizuj_tezine();
 
-    double vreme_par = izvrsi_trening(mreza, training_data, broj_epoha, isParallel, test_data);
+    // čisti aktivacije i delte 
+    mreza.zero_gradients();
+
+    // 3. Opciono: "Ohladi" procesor (malo pauziraj ili flush-uj keš)
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    omp_set_nested(0); // Onemogući gnežđenje ako nije potrebno
+    omp_set_dynamic(0); // Reci OS-u da ne oduzima niti usred rada
+
+    double vreme_par = izvrsi_trening(mreza, training_data, broj_epoha, isParallel, test_data, max_batch_size);
+    vreme_par *= broj_epoha; // ukupno trajanje treninga
+    auto train_results_p = evaluate(mreza, training_data, true);
+    float train_acc_p = train_results_p.first;
+    float train_loss_p = train_results_p.second;
+    auto test_results_p = evaluate(mreza, test_data, false);
+    float test_acc_p = test_results_p.first;
 
     // --- ISPIS REZULTATA ---
     std::cout << "\n===================================" << std::endl;
@@ -72,8 +97,11 @@ int main(int argc, char* argv[]) {
     std::cout << "Tacnost na trening skupu za sekvencijalnu mrezu: " << train_acc << "%" << std::endl; 
     std::cout << "Tacnost na test skupu za sekvencijalnu mrezu:    " << test_acc << "%" << std::endl;
     std::cout << std::endl;
-    std::cout << "Vreme treniranja paralelne mreze:     " << vreme_par << " s" << std::endl;
-    std::cout << "TODO" << std::endl;
+    std::cout << "Vreme treninga paralelne mreze:     " << vreme_par << " s" << std::endl;
+    std::cout << "Prosecan gubitak na trening skupu: " << train_loss_p << std::endl;
+    std::cout << "Tacnost na trening skupu za paralelnu mrezu: " << train_acc_p << "%" << std::endl; 
+    std::cout << "Tacnost na test skupu za paralelnu mrezu:    " << test_acc_p << "%" << std::endl;
+    std::cout << std::endl;
 
     if (vreme_par > 0) {
         std::cout << "Ubrzanje:      " << vreme_seq / vreme_par << " x" << std::endl;
@@ -83,7 +111,7 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-double izvrsi_trening(MLP& mreza, const Dataset& training_data, int epohe, bool parallel, const Dataset& test_data) {
+double izvrsi_trening(MLP& mreza, Dataset& training_data, int epohe, bool parallel, Dataset& test_data, const int batch_size) {
     std::string mod_ime = parallel ? "PARALELNI" : "SEKVENCIJALNI";
     std::cout << "Zapocinjem " << mod_ime << " trening..." << std::endl;
 
@@ -93,15 +121,18 @@ double izvrsi_trening(MLP& mreza, const Dataset& training_data, int epohe, bool 
         double start = omp_get_wtime();
         // pristup slici i labeli preko size_t i indeksa
         if (parallel) {
-            // N / num_threads = chunk_size
-            #pragma omp parallel for schedule(static) // chunk size za static, simd TODO!!!!!
-            for (size_t i = 0; i < training_data.images.size(); ++i) {
-                // Obrada slike i akumulacija u LOKALNE gradijente niti
-                mreza.train_step_parallel(training_data.images[i], training_data.targets[i]);
-            }
+            mreza.train_parallel(training_data, epohe, batch_size, test_data);
+            return mreza.prosecno_vreme_epohe;    
         } else {
-            for (size_t i = 0; i < training_data.images.size(); ++i) {
-                mreza.train_step_sequential(training_data.images[i], training_data.targets[i]);
+            for (int i = 0; i < training_data.n_samples; ++i) {
+                // Izračunaj gde počinje i-ta slika u velikom nizu
+                // i * 784 (input_dim)
+                float* trenutna_slika = training_data.images + (i * mreza.input_dim);
+                // Izračunaj gde počinje i-ti target (one-hot)
+                // i * 10 (output_dim)
+                float* trenutni_target = training_data.targets + (i * mreza.output_dim);
+                // Pozovi trening korak
+                mreza.train_step_sequential(trenutna_slika, trenutni_target);
             }
         }
         double end = omp_get_wtime(); 
@@ -139,29 +170,41 @@ double izvrsi_trening(MLP& mreza, const Dataset& training_data, int epohe, bool 
 
 
 std::pair<float, float> evaluate(MLP& network, const Dataset& data, bool calculate_loss_flag) {
+    // serijski se vrsi
     int correct = 0;
     // gubitak
     float total_loss = 0.0f;
-    size_t n = data.images.size();
+    int n = data.n_samples;
 
     // Paralelizujemo jedan prolaz sa dve redukcije istovremeno
-    #pragma omp parallel for num_threads(omp_get_max_threads()) reduction(+:correct, total_loss) schedule(static)
+    //#pragma omp parallel for num_threads(omp_get_max_threads()) reduction(+:correct, total_loss) schedule(static)
     // Ovo će se izvršiti na SVIM dostupnim jezgrima sistema
-    for (size_t i = 0; i < n; ++i) {
+    for (int i = 0; i < n; ++i) {
+        // Dobijanje pokazivača na sliku i target
+        float* trenutna_slika = data.images + (i * 784); // input_dim = 784
+        float* trenutni_target = data.targets + (i * 10); // output_dim = 10
+        // Forward pass (vraća float* na activations_1d[zadnji])
         // SAMO JEDAN forward pass - ovo je najveća ušteda!
-        std::vector<float> prediction = network.forward_seq(data.images[i]);
+        float* prediction = network.forward_seq(trenutna_slika);
         
-        // 1. Izračunaj tačnost
+        // Izračunaj tačnost (Argmax)
         // Pronađi indeks sa najvećom verovatnoćom (ono što mreža misli)
-        int predicted_label = std::distance(prediction.begin(), std::max_element(prediction.begin(), prediction.end()));
+        int predicted_label = 0;
+        float max_val = prediction[0];
+        for (int j = 1; j < 10; ++j) {
+            if (prediction[j] > max_val) {
+                max_val = prediction[j];
+                predicted_label = j;
+            }
+        }
         // Uporedi sa stvarnom labelom
         if (predicted_label == data.labels[i]) {
             correct++;
         }
 
-        // 2. Izračunaj gubitak (samo ako nam treba, npr. za trening skup)
+        // Izračunaj gubitak (samo ako nam treba, npr. za trening skup)
         if (calculate_loss_flag) {
-            total_loss += network.calculate_loss(prediction, data.targets[i]);
+            total_loss += network.calculate_loss(prediction, trenutni_target, 10);
         }
     }
 
@@ -171,3 +214,4 @@ std::pair<float, float> evaluate(MLP& network, const Dataset& data, bool calcula
 
     return {accuracy, avg_loss};
 }
+    
