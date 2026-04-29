@@ -31,7 +31,7 @@ int main(int argc, char* argv[]) {
     Dataset test_data = load_csv ("fashion-mnist_test.csv");
     if (test_data.n_samples == 0) return 1;
 
-    int max_batch_size = 512; // batch slika u isto vreme
+    int max_batch_size = 1920; // batch slika u isto vreme
     // treba da bude deljiv sa brojem procesa!
     std::cout << "Paralelno pokretanje obradjuje " << max_batch_size << " slika odjednom."<< std::endl;
     // Napravi mrežu
@@ -46,11 +46,12 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Postavljen faktor ucenja: " << faktorUcenja << std::endl;
 
-    int broj_epoha = 6; // menjati po potrebi
+    int broj_epoha = 2; // menjati po potrebi
     std::cout << "Broj epoha ucenja: " << broj_epoha << std::endl;
 
     // Testiram sekvencijalno
     bool isParallel = false;
+    /*
     mreza.batch_size = 1; // jedna po jedna slika
     
 
@@ -65,7 +66,7 @@ int main(int argc, char* argv[]) {
     // 2. Jedan prolaz kroz test podatke (računamo samo tačnost, loss nam ne treba)
     auto test_results = evaluate(mreza, test_data, false);
     float test_acc = test_results.first;
-
+*/
     isParallel = true;
     mreza.batch_size = max_batch_size; // vise slika istovremeno
 
@@ -87,7 +88,7 @@ int main(int argc, char* argv[]) {
     float train_loss_p = train_results_p.second;
     auto test_results_p = evaluate(mreza, test_data, false);
     float test_acc_p = test_results_p.first;
-
+/*
     // --- ISPIS REZULTATA ---
     std::cout << "\n===================================" << std::endl;
     std::cout << "Zavrsene sve epohe treninga sekvencijalne i paralelne mreze." << std::endl;
@@ -97,6 +98,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Tacnost na trening skupu za sekvencijalnu mrezu: " << train_acc << "%" << std::endl; 
     std::cout << "Tacnost na test skupu za sekvencijalnu mrezu:    " << test_acc << "%" << std::endl;
     std::cout << std::endl;
+    */
     std::cout << "Vreme treninga paralelne mreze:     " << vreme_par << " s" << std::endl;
     std::cout << "Prosecan gubitak na trening skupu: " << train_loss_p << std::endl;
     std::cout << "Tacnost na trening skupu za paralelnu mrezu: " << train_acc_p << "%" << std::endl; 
@@ -104,7 +106,7 @@ int main(int argc, char* argv[]) {
     std::cout << std::endl;
 
     if (vreme_par > 0) {
-        std::cout << "Ubrzanje:      " << vreme_seq / vreme_par << " x" << std::endl;
+        //std::cout << "Ubrzanje:      " << vreme_seq / vreme_par << " x" << std::endl;
     }
     std::cout << "===================================" << std::endl;
 

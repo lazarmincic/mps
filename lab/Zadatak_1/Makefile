@@ -8,13 +8,13 @@ CXXFLAGS = -fopenmp -Wall -O3 -mavx2 -ffast-math -march=native #-fsanitize=addre
 SRCS = main.cpp mlp.cpp
 
 # broj niti
-THREADS = 4
+THREADS = 6
 
 # broj skrivenih slojeva
 NUM_HIDDEN = 2
 
 # dimenzija svakog skrivenog sloja
-HIDDEN_DIM = 128
+HIDDEN_DIM = 256
 
 # OpenMP podešavanja
 export OMP_PROC_BIND = spread

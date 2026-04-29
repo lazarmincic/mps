@@ -5,7 +5,8 @@ MLP::MLP(int layers, int dim, int max_batch_size) {
     this->num_hidden = layers;
     this->hidden_dim = dim;
     std::random_device rd; 
-    trenutni_seed = rd();
+    //trenutni_seed = rd();
+    trenutni_seed = 42; //reproducibilnost
     inicijalizuj_strukturu(max_batch_size);
     inicijalizuj_tezine(); // Prva inicijalizacija
 }
