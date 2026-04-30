@@ -483,7 +483,6 @@ void MLP::backward_batch(float* target_batch, int batch_sz) {
 }
 
 void MLP::update_weights_batch(int batch_sz) {
-    // Faktor učenja delimo sa veličinom batch-a da dobijemo prosečni gradijent
     float m_lr = learning_rate / (float)batch_sz;
 
     for (int s = 0; s < num_weights_layers; ++s) {
@@ -491,30 +490,34 @@ void MLP::update_weights_batch(int batch_sz) {
         int n_in = layer_dims[s];
         
         float* W = weights_1d[s];
-        float* d_out_base = deltas_1d[s + 1]; // delte za sloj ispred
-        float* a_in_base = activations_1d[s];  // aktivacije sloja ispod
+        float* d_out_base = deltas_1d[s + 1]; 
+        float* a_in_base = activations_1d[s];  
 
-        // PARALELIZACIJA: Delimo neurone sloja (i) među nitima
-        // Svaka nit nezavisno ažurira "svoje" težine bez kolizije
-        #pragma omp parallel for schedule(static)
-        for (int i = 0; i < n_out; ++i) {
-            for (int j = 0; j < n_in; ++j) {
-                float gradient_sum = 0.0f;
+        // OPTIMIZACIJA: Menjamo redosled petlji (Loop Interchange)
+        // Spoljašnja petlja po batch-u omogućava bolju lokalnost podataka
+        for (int b = 0; b < batch_sz; ++b) {
+            
+            // Paralelizujemo po neuronima izlaznog sloja
+            // Svaka nit dobija grupu neurona 'i' i ažurira njihove težine
+            //#pragma omp parallel for schedule(static)
+            for (int i = 0; i < n_out; ++i) {
+                // d_i se učitava jednom za ceo red težina (Register Reuse)
+                float d_i = d_out_base[b * n_out + i];
+                
+                // Ako je delta nula, preskačemo ceo red (sitna optimizacija)
+                if (d_i == 0.0f) continue;
 
-                // REDUKCIJA: Ručna akumulacija gradijenta kroz CEO BATCH
-                // Pošto smo unutar #pragma omp for, ovo se izvršava linearno unutar svake niti
-                for (int b = 0; b < batch_sz; ++b) {
-                    float d_i = d_out_base[b * n_out + i];
-                    float a_j = a_in_base[b * n_in + j];
-                    gradient_sum += d_i * a_j;
+                float scaled_d_i = m_lr * d_i;
+                int row_offset = i * n_in;
+                int batch_offset = b * n_in;
+
+                for (int j = 0; j < n_in; ++j) {
+                    // Sekvencijalni pristup memoriji: W[row_offset + j] 
+                    // i a_in_base[batch_offset + j] su jedan do drugog u RAM-u
+                    W[row_offset + j] -= scaled_d_i * a_in_base[batch_offset + j];
                 }
-
-                // Ažuriranje težine (W = W - lr * grad_avg)
-                W[i * n_in + j] -= m_lr * gradient_sum;
             }
         }
-        // Implicitna barijera: sve težine sloja 's' moraju biti ažurirane 
-        // pre nego što pređemo na sloj 's+1'
     }
 }
 

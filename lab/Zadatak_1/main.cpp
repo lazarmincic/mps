@@ -9,6 +9,7 @@
 
 double izvrsi_trening(MLP& mreza, Dataset& training_data, int epohe, bool parallel, Dataset& test_data, const int batch_size);
 std::pair<float, float> evaluate(MLP& network, const Dataset& data, bool calculate_loss_flag);
+int izracunaj_idealni_batch(int num_threads) ;
 
 int main(int argc, char* argv[]) {
     if (argc < 4) {
@@ -31,7 +32,8 @@ int main(int argc, char* argv[]) {
     Dataset test_data = load_csv ("fashion-mnist_test.csv");
     if (test_data.n_samples == 0) return 1;
 
-    int max_batch_size = 480; // batch slika u isto vreme
+    int max_batch_size = izracunaj_idealni_batch(threads); // batch slika u isto vreme
+    max_batch_size = 480;
     // treba da bude deljiv sa brojem procesa!
     std::cout << "Paralelno pokretanje obradjuje " << max_batch_size << " slika odjednom."<< std::endl;
     // Napravi mrežu
@@ -217,3 +219,29 @@ std::pair<float, float> evaluate(MLP& network, const Dataset& data, bool calcula
     return {accuracy, avg_loss};
 }
     
+int izracunaj_idealni_batch(int num_threads) {
+    //  KB u bajtove i ciljamo 70% popunjenosti
+    // moja masina - 512kb l2
+    int l2_cache_kb = 512;
+    double dostupno_bajtova = l2_cache_kb * 1024 * 0.7;
+
+    // koliko memorije zauzima jedan uzorak (aktivacije + delte)
+    // (n_in + n_out) neurona * 4 bajta (float)
+    int n_in = 784;
+    int n_out = 10;
+    int bajtova_po_uzorku = (n_in + n_out) * sizeof(float);
+
+    //  koliko uzoraka staje u kes po jednoj niti
+    int batch_po_niti = (int)(dostupno_bajtova / bajtova_po_uzorku);
+
+    // ukupni batch za sve niti
+    int predlozeni_batch = batch_po_niti * num_threads;
+
+    // najblizi manji broj koji je deljiv sa NZS(2,3,4,5,6) = 60
+    // Ovo osigurava da svaka konfiguracija niti dobije ravnomeran posao.
+    int nzs = 60; 
+    int finalni_batch = (predlozeni_batch / nzs) * nzs;
+
+    // Obezbedjujemo da batch ne bude 0
+    return (finalni_batch > 0) ? finalni_batch : nzs;
+}
