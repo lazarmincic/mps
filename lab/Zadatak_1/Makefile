@@ -8,7 +8,7 @@ CXXFLAGS = -fopenmp -Wall -O3 -mavx2 -ffast-math -march=native #-fsanitize=addre
 SRCS = main.cpp mlp.cpp
 
 # broj niti
-THREADS = 1
+THREADS = 5
 
 # broj skrivenih slojeva
 NUM_HIDDEN = 2

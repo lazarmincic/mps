@@ -36,53 +36,35 @@ public:
     float ** deltas_1d;
     int num_layers; // broj slojeva aktivacija
     // Ukupan broj slojeva (npr. input + hidden + output)
-    int max_batch;
-    int batch_size; // Ova promenljiva kaže funkcijama koliko mesta u memoriji da zapravo koriste
+    float*** private_weight_grads;
+    int num_threads = 1;
+    //static const int max_threads = 6; // za evaluate
 
-    double prosecno_vreme_epohe = 0;
-    double poslednje_vreme_treninga = 0;
-
-    MLP(int layers, int dim, int max_batch_size);
+    MLP(int layers, int dim, int threads);
 
     // Za oslobađanje memorije
     ~MLP();
 
     // Aktivaciona funkcije
     float relu(float x);
-
     // Softmax računa verovatnoće za ceo izlazni sloj
     void softmax(float* data, int size);
-
-    // Glavna funkcija za učenje
-
-    void train_step_sequential(float* input, float* target);
-
     // za testiranje
     float* forward_seq(float* input, int b_idx = 0);
 
     void inicijalizuj_tezine() ;
 
-    unsigned int get_seed();
+    void inicijalizuj_strukturu() ;
 
-    void inicijalizuj_strukturu(int max_batch_size) ;
-
-    void backward_seq(float* target);
-
-    void set_learning_rate(float lr);
+    void backward_accumulate(float* target, int b_idx, float* my_grads[]);
 
     float calculate_loss(const float* output, const float* target, int size);
 
-    void train_parallel(Dataset& data, int epochs, int batch_size, Dataset& test_data);
+    double train_parallel(Dataset& data, int epoch, Dataset& test_data);
 
-    void forward_batch(float* input_batch, int current_batch_size);
+    std::pair<float, float> evaluate( Dataset& data, bool calculate_loss_flag);
 
-    void backward_batch(float* target_batch, int batch_sz);
-
-    void update_weights_batch(int batch_sz);
-
-    void evaluate_internal(const Dataset& data, bool calculate_loss_flag, int& shared_correct, float& shared_loss);
-
-    void zero_gradients();
+    
 };
 
 #endif
