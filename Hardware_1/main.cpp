@@ -5,16 +5,22 @@
 #include "MemoryController.hpp"
 #include "Common.hpp"
 
-void progIspis(ExecutableProgram prog);
-
 uint64_t Simulation::cycleCount = 0; // globalni takt
 
 // main pokreće jedan korak simulacije
 int main()
 {
+    std::ofstream out("output.html");
+    std::streambuf *coutbuf = std::cout.rdbuf();
+    std::cout.rdbuf(out.rdbuf());
 
-    Bus bus;                   // napravljen objekat klase Bus
-    MemoryController memContr; // napravljen objekat klase mc
+    // ZAGLAVLJE FAJLA - ovo ispisuje samo na početku
+    podesiZaglavljeHtml();
+
+    std::stringstream msg;
+
+    Bus bus("BUS");                   // napravljen objekat klase Bus
+    MemoryController memContr("MMC"); // napravljen objekat klase mc
 
     // Kreiraj sve komponente
     CacheController cc0(Controller::CC0); // objekti klase cc0, sa svojim imenima
@@ -37,13 +43,15 @@ int main()
     memContr.setBus(&bus);
     // kruzna zavisnost
 
-    std::cout << "Sys: Kontroleri povezani sa magistralom.\n";
+    msg << "Kontroleri povezani sa magistralom.";
+    log(msg, "SYS");
 
     // CPU ima direktan pristup svom CC
     cpu0.setCacheController(&cc0);
     cpu1.setCacheController(&cc1);
     cpu2.setCacheController(&cc2);
-    std::cout << "Sys: Procesori povezani sa odgovarajucim kontrolerima kesa.\n";
+    msg << "Procesori povezani sa odgovarajucim kontrolerima kesa.";
+    log(msg, "SYS");
 
     // učitavanje programa u programsku memoriju odgovarajućeg procesora
 
@@ -65,22 +73,20 @@ int main()
     // petlja u kojoj se vrši simulacija, jedan krug je jedan "tick" simulatora
     while (true)
     {
-
         cpu0.tick();
         cpu1.tick();
         cpu2.tick();
-
         // keš hit - kraj, nema interakcije sa magistralom, jezgro je "tiho"
         // keš mis - šalje se signal na magistralu
         // može biti više keš misova u isto vreme, unutar Bus se vrši arbitracija
 
-        bus.tick(); // snooping, C signal, dostavljanje podatka onome ko ga je tražio
+        memContr.tick(); // dovlacenje podatka iz gl. memorije
 
         cc0.tick(); // dovlačenje podataka
         cc1.tick();
-        cc2.tick();
+        cc2.tick(); //
 
-        memContr.tick(); // dovlacenje podatka iz gl. memorije
+        bus.tick(); // snooping, C signal, dostavljanje podatka onome ko ga je tražio
 
         Simulation::cycleCount++; // globalni "takt"
 
@@ -90,107 +96,17 @@ int main()
         {
             break;
         }
-        if (Simulation::cycleCount == 120)
-            return 1; // debug
     }
-    std::cout << "\nStatistika: ...\n";
+    msg << "Sva jezgra zavrsila posao.";
+    log(msg, "SYS");
+
+    cpu0.statIspis();
+    cpu1.statIspis();
+    cpu2.statIspis();
+
+    bus.statIspis();
+
+    std::cout << "</table></body></html>";
+    std::cout.rdbuf(coutbuf);
     return 0;
-}
-
-void progIspis(ExecutableProgram prog)
-{
-    /*
-    Funkcija ispisuje ono što se nalazi u strukturi ExecutableProgram
-    Služi za debug - da bismo videli da li je ulazna datoteka ispravno parsovana.
-    */
-    std::cout << "Parsirano " << prog.instructions.size() << " instrukcija\n\n";
-
-    for (size_t i = 0; i < prog.instructions.size(); i++)
-    {
-        const auto &instr = prog.instructions[i];
-        std::cout << "Instrukcija " << i << ": " << instr;
-        std::cout << "\n";
-    }
-
-    std::cout << "\nLabele:\n";
-    for (const auto &[labelName, instrIdx] : prog.labelMap)
-    {
-        std::cout << "  " << labelName << " -> instrukcija " << instrIdx << "\n\n";
-    }
-}
-
-void instrIspis(Instruction isntr)
-{
-}
-
-std::ostream &operator<<(std::ostream &os, const Controller &controller)
-{
-    switch (controller)
-    {
-    case Controller::CC0:
-        os << "CC0";
-        break;
-    case Controller::CC1:
-        os << "CC1";
-        break;
-    case Controller::CC2:
-        os << "CC2";
-        break;
-    case Controller::MEMC:
-        os << "MEMC";
-        break;
-    default:
-        os << "Unknown";
-        break;
-    }
-    return os;
-}
-
-std::ostream &operator<<(std::ostream &os, const CacheState &state)
-{
-    switch (state)
-    {
-    case CacheState::M:
-        os << "M";
-        break;
-    case CacheState::E:
-        os << "E";
-        break;
-    case CacheState::S:
-        os << "S";
-        break;
-    case CacheState::I:
-        os << "I";
-        break;
-    default:
-        os << "Unknown";
-        break;
-    }
-    return os;
-}
-
-std::ostream &operator<<(std::ostream &os, const BusTransaction &trans)
-{
-    switch (trans)
-    {
-    case BusTransaction::FLUSH:
-        os << "flush";
-        break;
-    case BusTransaction::FLUSHOPT:
-        os << "flushopt";
-        break;
-    case BusTransaction::IDLE:
-        os << "idle";
-        break;
-    case BusTransaction::READ:
-        os << "read";
-        break;
-    case BusTransaction::UPGRADE:
-        os << "upgrade";
-        break;
-    case BusTransaction::WRITE:
-        os << "write";
-        break;
-    }
-    return os;
 }

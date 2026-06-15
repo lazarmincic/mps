@@ -30,3 +30,7 @@ clean:
 rebuild: clean $(TARGET)
 
 -include $(OBJS:.o=.d)
+
+.PHONY: run
+run: $(TARGET)
+	./$(TARGET)

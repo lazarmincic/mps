@@ -23,10 +23,18 @@ private:
     CacheController *cacheControllers[3];
     MemoryController *memoryController;
 
+    int busyCycles;
     bool canCollect;
 
+    BusSignal pendingResponse; // za flushopt i flush
+    Controller winner;         // unutrasnja arb
+    std::string busName;       // za ispis
+
+    std::stringstream msg;
+    uint64_t transNum;
+
 public:
-    Bus();
+    Bus(std::string name);
 
     void registerMemoryController(MemoryController *memContr);
     void registerCacheController(int cpuID, CacheController *cacheContr);
@@ -49,14 +57,20 @@ public:
     void dropBusRequest(Controller controller);
 
     void flush(Data data);
+    void flushOpt(Data data);
+    void upgrade();
 
     bool isAcknowledge();
+    Controller getWinner() const;
+
+    void statIspis();
 
 private:
     void grantBus();
     void broadcastRequest();
     void collectResponses();
     void releaseBus();
+    void busLog(std::stringstream &ss, LogLevel level = maxLogLevel);
 };
 
 #endif

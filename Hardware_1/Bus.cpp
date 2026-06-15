@@ -1,6 +1,6 @@
 #include "Bus.hpp"
 
-Bus::Bus()
+Bus::Bus(std::string name)
 {
     lastWinner = Controller::NONE;
     isBusy = false;
@@ -8,7 +8,13 @@ Bus::Bus()
     currentSignal = BusSignal();
     sharedLine = false;
     canCollect = false;
-    std::cout << "Sys: Magistrala na mrezi.\n";
+    busyCycles = 0;
+    pendingResponse = BusSignal();
+    winner = Controller::NONE;
+    busName = name;
+    transNum = 0;
+    msg << "Na mrezi.";
+    busLog(msg);
 }
 
 const BusSignal &Bus::getCurrentSignal() const
@@ -47,8 +53,10 @@ void Bus::releaseBus()
     currentSignal.data = {0};
     sharedLine = false;
     canCollect = false;
-    std::cout << Simulation::cycleCount << " Bus: magistrala oslobodjena\n";
-    std::cout << "**************************************************************************************************\n";
+    busyCycles = 0;
+    pendingResponse = BusSignal();
+    msg << "Oslobadjam resurse.";
+    busLog(msg);
 }
 
 void Bus::tick()
@@ -57,7 +65,7 @@ void Bus::tick()
     // 1. Ako niko ne koristi magistralu, pokušaj arbitražu
     if (!isBusy)
     {
-        grantBus();
+        grantBus(); // u njemu se menja isBusy
         if (this->currentOwner != Controller::NONE)
         {
             canCollect = false;
@@ -71,33 +79,44 @@ void Bus::tick()
             collectResponses();
             releaseBus(); //
         }
-        else
+        else if (busyCycles > 0) // neko je promenio vrednost, postoji cekanje..
         {
             // MAGISTRALA JE ZAMRZNUTA:
             // Ne radimo ništa, isBusy ostaje true, currentOwner ostaje isti.
             // U sledećem ciklusu main će opet pozvati tick() i opet ćemo doći ovde.
+
+            // canCollect je false
+
+            busyCycles--;
+            if (busyCycles == 0)
+            {
+                canCollect = true;
+            }
+            // cekanje na magistrali za flushopt
         }
     }
 }
 void Bus::requestBus(Controller devicePosting, const BusSignal &signal)
 {
     activeSignals[devicePosting] = signal;
-    std::cout << Simulation::cycleCount << " Bus: " << devicePosting << " zahteva pristup magistrali. Zeli da ";
+    msg << devicePosting << " zahteva pristup magistrali. Zeli da ";
     switch (signal.type)
     {
     case BusTransaction::READ:
-        std::cout << "cita sa adrese " << signal.address.val;
+        msg << "cita sa adrese " << signal.address;
         break;
     case BusTransaction::WRITE:
-        std::cout << "upise " << signal.data.val << " na adresu " << signal.address.val;
+        msg << "upise " << signal.data << " na adresu " << signal.address;
         break;
     case BusTransaction::UPGRADE:
-        std::cout << "invalidira tudje kopije na adresi " << signal.address.val;
+        msg << "invalidira tudje kopije na adresi " << signal.address;
         break;
     default:
-        std::cerr << "GRESKA!";
+        msg << "Nemoguc signal.";
+        busLog(msg, ERROR);
+        return;
     }
-    std::cout << "\n";
+    busLog(msg);
 }
 
 void Bus::grantBus()
@@ -114,25 +133,26 @@ void Bus::grantBus()
     }
 
     // ispis
-    std::cout << Simulation::cycleCount << " Bus: Arbitriram signale ";
+    msg << "Arbitriram signale ";
     for (auto it = activeSignals.begin(); it != activeSignals.end(); ++it)
     {
         // Koristimo it->first za ključ (kontroler) i it->second za vrednost (signal)
         const auto &kontroler = it->first;
         const auto &signal = it->second;
 
-        std::cout << signal.type << " (" << kontroler << ")";
+        msg << signal.type << " (" << kontroler << ")";
 
         // Provera da li je trenutni element poslednji u mapi
         if (std::next(it) == activeSignals.end())
         {
-            std::cout << ".\n"; // Tačka na kraju poslednjeg
+            msg << "."; // Tačka na kraju poslednjeg
         }
         else
         {
-            std::cout << ", "; // Zarez i novi red za ostale
+            msg << ", "; // Zarez za ostale
         }
     }
+    busLog(msg);
 
     // Round Robin
     auto iter = activeSignals.upper_bound(lastWinner); // sledeci koji nije bio na redu
@@ -144,48 +164,59 @@ void Bus::grantBus()
     lastWinner = currentOwner;
     currentSignal = iter->second;
     isBusy = true;
-    std::cout << "**************************************************************************************************\n";
-    std::cout << Simulation::cycleCount << " Bus: Magistralu zauzeo " << currentOwner << ", transakcija " << currentSignal.type << "\n";
+    busyCycles = 0;
+    msg << "Magistralu zauzeo " << currentOwner << ", transakcija " << currentSignal.type;
+    busLog(msg);
+    transNum++;
 }
 
 void Bus::broadcastRequest()
 {
-    // snoop se desava samo jednom, prilikom dodeljivanja magistrale
-
-    // std::cout << "[BUS] REQUEST: CPU" << currentOwner << " emituje zahtev\n";
-
     // ovde se dešava snooping
-    Controller winner = Controller::NONE; // ovde se desava arbitracija unutar arbitracije
+    winner = Controller::NONE; // ovde se desava arbitracija unutar arbitracije
+    CacheState stateOfWinner = CacheState::I;
     if (currentSignal.type != BusTransaction::UPGRADE)
     {
         Address addr = {currentSignal.address};
+
         for (auto &controller : cacheControllers)
         {
             if (controller->isHit(addr))
             {
                 pullSharedLine(); // C signal
-                std::cout << Simulation::cycleCount << " Bus: " << controller->getController()
-                          << ": Imam kesiran blok na adresi " << addr.val << " u stanju " << controller->getState(addr) << ". Postavljam C liniju na visok napon.\n";
+                CacheState state = controller->getState(addr);
+
+                msg << controller->getController() << " ima kesiran blok na adresi " << addr.val << " u stanju " << state << ". Postavljam C liniju na visok napon.";
+                busLog(msg);
                 // ARBITRACIJA: Prvi (najmanji ID) koji ima podatak postaje zadužen za slanje
                 if (winner == Controller::NONE)
                 {
                     winner = controller->getController();
+                    stateOfWinner = state; // za ispis
                 }
             }
         }
-        if (winner != Controller::NONE) // nece se ispisivati ako je tran upgrade ili niko nema podatak
+        if (winner != Controller::NONE)
         {
-
-            std::cout << Simulation::cycleCount << " Bus: Unutrasnja arbitraza - " << winner << " ce dostavljati podatak. \n";
+            if (stateOfWinner == CacheState::S)
+            {
+                msg << "Unutrasnja arbitraza - " << winner << " ce dostavljati podatak.";
+            }
+            else if (stateOfWinner == CacheState::E || stateOfWinner == CacheState::M)
+            {
+                msg << "Unutrasnja arbitraza nije potrebna, jedino " << winner << " moze dostaviti podatak.";
+            }
+            busLog(msg);
         }
-        if (sharedLineActive())
+        if (!sharedLineActive())
         {
-            std::cout << Simulation::cycleCount << " Bus: Detektovana kopija u drugom kesu. C linija visoka.\n";
+            msg << "Nijedan drugi kes nema podatak. C linija niska.";
+            busLog(msg);
         }
-        else
-        {
-            std::cout << Simulation::cycleCount << " Bus: Nijedan drugi kes nema podatak. C linija niska.\n";
-        }
+    }
+    else
+    {
+        busyCycles = Latency::BUS_UPGRADE; // magistrala je uzrok kasnjenja
     }
 
     // Sada pozivamo pravi snoop, ali mu kažemo da li je on taj koji treba da šalje
@@ -195,11 +226,21 @@ void Bus::broadcastRequest()
         controller->snoop(currentSignal, shouldRespond);
         // u snoop je impl. da se ignorise sopstveni signal
     }
-
     memoryController->snoop(currentSignal);
     // snoop metode u isto vreme postavljaju signal na magistralu
     // on se obrađuje u collectResponses()
-    // std::cout << Simulation::cycleCount << " Uredjaji na magistrali zavrsili osluskivanje. \n";
+
+    // moraju prvo svi da zavrse sa osluskivanjem currentS. pre nego sto se on promeni..
+    if (currentSignal.type != pendingResponse.type && pendingResponse.type != BusTransaction::IDLE) // neko odgovorio
+    {
+        currentSignal = pendingResponse; // flush ili flushopt sa podatkom je ovde
+    }
+    if (currentSignal.type == BusTransaction::FLUSH) // upgrade, flushopt
+    {
+        memoryController->flush();
+    }
+    msg << "Kontroleri zavrsili sa presretanjem.";
+    busLog(msg);
 }
 
 // Kontroleri zovu ovo ako imaju pogodak (Snoop Hit)
@@ -223,15 +264,34 @@ void Bus::putDataOnBus(const BusSignal &response)
     // Direktno stavljamo odgovor na magistralu
     // Bez arbitraže, jer memorija samo odgovara Masteru koji već drži bus
     currentSignal = response;
-    std::cout << Simulation::cycleCount << " Bus: podatak postavljen na magistralu.\n";
+    msg << "Podatak postavljen.";
+    busLog(msg);
     acknowledgeResponse();
 }
 
 void Bus::flush(Data data)
 {
-    currentSignal.type = BusTransaction::FLUSH;
-    currentSignal.data = data;
+    pendingResponse = currentSignal; // address
+    pendingResponse.type = BusTransaction::FLUSH;
+    pendingResponse.data = data;
     // nema acknowledge response jer magistrala treba da bude blokirana dok se podatak vadi iz mem
+}
+
+void Bus::flushOpt(Data data)
+{
+    pendingResponse = currentSignal; // address
+    pendingResponse.type = BusTransaction::FLUSHOPT;
+    pendingResponse.data = data;
+    busyCycles = Latency::REMOTE_CACHE; //
+
+    // nema acknowledge response jer magistrala treba da bude blokirana dok traje cache to cache transfer
+}
+
+void Bus::upgrade()
+{
+    pendingResponse = currentSignal;
+    pendingResponse.type = BusTransaction::UPGRADE; // vec je ovo
+    busyCycles = Latency::BUS_UPGRADE;              // ovaj deo najbitniji
 }
 
 void Bus::collectResponses()
@@ -240,8 +300,16 @@ void Bus::collectResponses()
     // current owner je master
     // ovde se odgovor "vraca" onome ko je trazio podatak (masteru)
     // prvo upis u memoriju, isto ovde, pa tek onda vracanje masteru
-
-    std::cout << Simulation::cycleCount << " Bus: Vracam podatak " << currentOwner << " (masteru).\n";
+    if (currentSignal.type != BusTransaction::UPGRADE)
+    {
+        msg << "Vracam podatak " << currentOwner << " (masteru).";
+        busLog(msg);
+    }
+    else
+    {
+        msg << "Obavestavam " << currentOwner << " (mastera).";
+        busLog(msg);
+    }
     switch (currentOwner)
     {
     case Controller::CC0:
@@ -254,7 +322,7 @@ void Bus::collectResponses()
         cacheControllers[2]->receiveBusResponse();
         break;
     default:
-        break;
+        busLog(msg, ERROR);
     }
 }
 
@@ -262,7 +330,8 @@ void Bus::acknowledgeResponse()
 {
     // Ovu metodu poziva RAM ili Cache kada završe
     canCollect = true;
-    std::cout << Simulation::cycleCount << " Bus: kontroleri zavrsili sa odgovorom / presretanjem.\n";
+    msg << "Kontroleri zavesili sa odgovorom.";
+    busLog(msg);
 }
 
 bool Bus::isAcknowledge()
@@ -275,6 +344,22 @@ void Bus::dropBusRequest(Controller controller)
     if (activeSignals.count(controller) > 0) // postoji u mapi
     {
         activeSignals.erase(controller); // obrisi ga
-        std::cout << Simulation::cycleCount << " " << controller << ": Odustajem od pristupa magistrali.\n";
     }
+}
+
+Controller Bus::getWinner() const
+{
+    return winner;
+}
+
+void Bus::busLog(std::stringstream &ss, LogLevel level)
+{
+    ::log(ss, busName, level);
+}
+
+void Bus::statIspis()
+{
+    std::stringstream msg;
+    msg << "Broj iniciranih transakcija na magistrali: " << transNum;
+    ::log(msg, "SYS");
 }

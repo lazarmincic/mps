@@ -32,7 +32,10 @@ CPU::CPU(const std::string &name)
     handlers["sc"] = &CPU::handleStoreCond;
 
     cpuName = name;
-    std::cout << "Sys: " << cpuName << " na mrezi.\n";
+    msg << "Na mrezi.";
+    cLog(msg);
+
+    pristupiMem = 0;
 }
 
 void CPU::execute(Instruction &instr)
@@ -47,7 +50,8 @@ void CPU::execute(Instruction &instr)
     }
     else
     {
-        std::cerr << "Nepoznata instrukcija: " << instr.mnemonic << "\n";
+        msg << "Nepoznata instrukcija: " << instr.mnemonic;
+        cLog(msg, ERROR);
         // ne bi trebalo nikada da se desi
     }
 
@@ -56,11 +60,9 @@ void CPU::execute(Instruction &instr)
     // 2. Kontroler nije bio zauzet (instrukcija nije "odbijena")
     // oldpc - Ako instrukcija NIJE izazvala stall i NIJE se zaglavila (kao SC iznad), uvećaj PC
     if (!stalling && pc.val == oldPc.val)
-
     // nema cache to cache transfera koji je u toku
     // drugim recima cache controller nije zauzet
     {
-
         pc.val++; // Prelazimo na sledeću instrukciju u vektoru
     }
 }
@@ -74,14 +76,15 @@ void CPU::tick()
     if (reservation_active && cacheController->isReservationBroken())
     {
         reservation_active = false;
-        std::cout << Simulation::cycleCount << " " << cpuName << ": Rezervacija na adresi " << load_reservation_address.val
-                  << " ponistena eksternim upisom!\n";
+
+        msg << "Rezervacija na adresi " << load_reservation_address << " ponistena eksternim upisom.";
+        cLog(msg);
         // Ako smo bili u stall-u baš zbog SC instrukcije, moramo je prekinuti
         if (stalling && prog.instructions[pc.val].mnemonic == "sc")
         {
             finnishPendingInstruction(); // Ovo će upisati 1 u rd (neuspeh)
             cacheController->resetReady();
-            pc.val++;
+            pc.val++; // Prelazimo na sledeću instrukciju u vektoru
             stalling = false;
             return; // Kraj za ovaj ciklus
         }
@@ -107,7 +110,7 @@ void CPU::tick()
             //   CLEANUP
             cacheController->resetReady();
             // CONTINUE: Idemo na sledeću instrukciju
-            pc.val++;
+            pc.val++; // Prelazimo na sledeću instrukciju u vektoru
             stalling = false;
         }
         else
@@ -123,14 +126,21 @@ void CPU::tick()
         // Provera da li je kontroler zauzet snoop-ovanjem pre nego što uopšte pokušamo execute
         if (cacheController->isResponding())
         {
+            /*
+            std::string instr = prog.instructions[pc.val].mnemonic;
+            if (instr != "addi" && instr != "bne")
+            {*/
             return; // Čekaj da kontroler završi cache-to-cache transfer
+            //}
+            //
         }
         execute(prog.instructions[pc.val]);
     }
     else
     {
         done = true;
-        std::cout << Simulation::cycleCount << " " << cpuName << ": Program " << prog.programName << " uspesno izvrsen.\n";
+        msg << "Program " << prog.programName << " uspesno izvrsen.";
+        cLog(msg);
     }
 }
 
@@ -138,7 +148,8 @@ void CPU::load(const ExecutableProgram &prog)
 {
     this->prog = prog;
     this->pc = {0};
-    std::cout << cpuName << ": Program \"" << prog.programName << "\" ucitan u memoriju za instrukcije.\n";
+    msg << "Program \"" << prog.programName << "\" ucitan u memoriju za instrukcije.";
+    cLog(msg);
 }
 
 int CPU::findLabelIndex(const std::string &name)
@@ -184,11 +195,14 @@ void CPU::handleAddi(const Instruction &instr)
     // addi rd, rs1, imm
     registers[instr.rd] = {getReg(instr.rs1).val + instr.imm.val};
     stalling = false;
-    std::cout << Simulation::cycleCount << " " << cpuName << ": Izvrsena instrukcija " << pc.val << " - " << instr << "\n";
+    msg << "Izvrsena instrukcija " << pc << " - " << instr;
+    cLog(msg);
 }
 
 void CPU::handleBne(const Instruction &instr)
 {
+    msg << "Izvrsena instrukcija " << pc << " - " << instr;
+    cLog(msg);
     // branch not equal op
     // bne rs1, rs2, label
     if (getReg(instr.rs1).val != getReg(instr.rs2).val)
@@ -197,28 +211,12 @@ void CPU::handleBne(const Instruction &instr)
         pc.val = findLabelIndex(instr.label);
     }
     stalling = false;
-    std::cout << Simulation::cycleCount << " " << cpuName << ": Izvrsena instrukcija " << pc.val << " - " << instr << "\n";
-}
-
-void CPU::handleLoad(const Instruction &instr)
-{
-    // load (word) op
-    // ld rd, 0(rs1) -> Obično čitanje
-    std::cout << Simulation::cycleCount << " " << cpuName << " krecem sa izvrsavanjem instrukcije " << instr << "\n";
-    Address adresa = {(uint32_t)(getReg(instr.rs1).val + instr.imm.val)};
-    if (cacheController->isHit(adresa))
-    {
-        registers[instr.rd] = cacheController->getData(adresa);
-    }
-    else
-    {
-        cacheController->readMiss(adresa);
-    }
 }
 
 void CPU::handleLoadReserved(const Instruction &instr)
 {
-    std::cout << Simulation::cycleCount << " " << cpuName << " krecem sa izvrsavanjem instrukcije " << instr << "\n";
+    msg << "Krecem sa izvrsavanjem instrukcije " << pc << " - " << instr;
+    cLog(msg);
     // load reserved op
     // lr rd, 0(rs1) -> Load Reserved
     Address addr = {uint32_t(getReg(instr.rs1).val + instr.imm.val)};
@@ -226,15 +224,51 @@ void CPU::handleLoadReserved(const Instruction &instr)
     // 1. Postavljamo CPU u stanje zastoja (Stall)
     stalling = true;
     stallStartCycle = Simulation::cycleCount;
+    pristupiMem++;
     if (cacheController->isHit(addr))
     {
-        std::cout << Simulation::cycleCount << " " << cpuName << ": pogodak u kesu pri citanju sa adrese " << addr.val << ".\n";
+        msg << "Pogodak u kesu pri citanju sa adrese " << addr << ".";
+        cLog(msg);
+        cacheHits++;
         cacheController->startInternalRead(addr);
         // ukupno 2 ciklusa - 1 za pristup i 1 za dek. instr.
     }
     else
     {
-        std::cout << Simulation::cycleCount << " " << cpuName << ": promasaj u kesu pri citanju sa adrese " << addr.val << ".\n";
+        msg << "Promasaj u kesu pri citanju sa adrese " << addr << ".";
+        cLog(msg);
+        cacheMisses++;
+        // statistika, broj promasaja
+        cacheController->readMiss(addr); // I stanje
+        // koliko ceka zavisi od cekanja na magistralu..
+        // stallCycles zavisi od toga da li podatak dolazi iz mem ili iz c
+    }
+}
+
+void CPU::handleLoad(const Instruction &instr)
+{
+    // load (word) op
+    // ld rd, 0(rs1) -> Obično čitanje
+    msg << "Krecem sa izvrsavanjem instrukcije " << pc << " - " << instr;
+    cLog(msg);
+    Address addr = {uint32_t(getReg(instr.rs1).val + instr.imm.val)};
+    // 1. Postavljamo CPU u stanje zastoja (Stall)
+    stalling = true;
+    stallStartCycle = Simulation::cycleCount;
+    pristupiMem++;
+    if (cacheController->isHit(addr))
+    {
+        msg << "Pogodak u kesu pri citanju sa adrese " << addr << ".";
+        cLog(msg);
+        cacheHits++;
+        cacheController->startInternalRead(addr);
+        // ukupno 2 ciklusa - 1 za pristup i 1 za dek. instr.
+    }
+    else
+    {
+        msg << "Promasaj u kesu pri citanju sa adrese " << addr << ".";
+        cLog(msg);
+        cacheMisses++;
         cacheController->readMiss(addr); // I stanje
         // koliko ceka zavisi od cekanja na magistralu..
         // stallCycles zavisi od toga da li podatak dolazi iz mem ili iz c
@@ -243,61 +277,29 @@ void CPU::handleLoadReserved(const Instruction &instr)
 
 void CPU::handleStore(const Instruction &instr)
 {
-    std::cout << Simulation::cycleCount << " " << cpuName << " krecem sa izvrsavanjem instrukcije " << instr << "\n";
     // store (word) op
     // st rs2, 0(rs1) -> Običan upis
-    Address addr = {getReg(instr.rs1).val + (uint32_t)instr.imm.val}; // imm može biti negativan
-    Data data = {getReg(instr.rs2)};
-    if (cacheController->isHit(addr))
-    {
-        cacheController->storeData(addr, data);
-    }
-    else
-    {
-        cacheController->writeMiss(addr, data);
-    }
-
-    // Bitno: Bilo koji "običan" Store na rezervisanu adresu od strane drugog CPU-a
-    // bi trebalo da poništi rezervaciju, ali ovde simuliramo samo lokalni CPU.
-}
-
-void CPU::handleStoreCond(const Instruction &instr)
-{
-
-    std::cout << Simulation::cycleCount << " " << cpuName << " krecem sa izvrsavanjem instrukcije " << instr << "\n";
+    msg << "Krecem sa izvrsavanjem instrukcije " << pc << " - " << instr;
+    cLog(msg);
 
     uint32_t adresa = getReg(instr.rs1).val + instr.imm.val;
     Address addr = {adresa};
 
-    if (!reservation_active || load_reservation_address.val != addr.val)
-    {
-        // Neuspeh: ne upisujemo ništa, u rd stavljamo 1 (error)
-        registers[instr.rd] = {1}; // Neuspeh
-        reservation_active = false;
-        stalling = false; //
-        // PC će se uvećati u execute() jer nismo u stall-u
-        std::cout << Simulation::cycleCount << " " << cpuName << " izvrsio instrukciju " << instr << " (neuspesno).\n";
-        return;
-    }
-    // store conditional op
-    // sc rd, rs2, 0(rs1) -> Store Conditional
-
     if (cacheController->isResponding()) // busy, u procesu slanja
     {
-        std::cout << Simulation::cycleCount << " " << cpuName << " " << instr << " ne moze da se izvrsi, cache-to-cache transfer u toku\n";
-        std::cerr << Simulation::cycleCount << " " << cpuName << " Pecovano, ne bi trebalo nikada da se desi\n";
-        return;
+        msg << "Ne bi trebalo nikada da se desi";
+        cLog(msg, ERROR);
     }
 
-    std::cout << Simulation::cycleCount << " " << cpuName << " " << instr << " instrukcija moze da se izvrsi, kontroler kesa nije zauzet\n";
+    msg << instr << " instrukcija moze da se izvrsi, kontroler kesa nije zauzet";
+    cLog(msg);
 
     pendingAddr = {adresa};
     Data data = {getReg(instr.rs2)};
     pendingData = data; // Podatak koji želimo da upišemo
     stalling = true;
     stallStartCycle = Simulation::cycleCount;
-
-    // Uspeh: upisujemo vrednost i u rd stavljamo 0
+    pristupiMem++;
 
     CacheState state = cacheController->getState(addr);
     if (cacheController->isHit(addr))
@@ -305,7 +307,10 @@ void CPU::handleStoreCond(const Instruction &instr)
         // M S E su hit
         // M i E - ne ide se na magistralu
         // S i I - ide se na magistralu
-        std::cout << Simulation::cycleCount << " " << cpuName << ": pogodak u kesu pri pisanju podatka " << data.val << " na adresu " << addr.val << "\n";
+        msg << "Pogodak u kesu pri pisanju podatka " << data << " na adresu " << addr;
+        cLog(msg);
+
+        cacheHits++;
 
         if (state == CacheState::E || state == CacheState::M)
         {
@@ -326,6 +331,89 @@ void CPU::handleStoreCond(const Instruction &instr)
     {
         // I stanje, ide se na magistralu
         cacheController->writeMiss(addr, data);
+        cacheMisses++;
+        // kako znati da je upis uspeo? treba potvrda sa magistrale, tek onda registar na nulu i fleg menjati
+        // ovo se nikad ne desava zbog prirode programa
+    }
+
+    // Bitno: Bilo koji "običan" Store na rezervisanu adresu od strane drugog CPU-a
+    // bi trebalo da poništi rezervaciju, ali ovde simuliramo samo lokalni CPU.
+}
+
+void CPU::handleStoreCond(const Instruction &instr)
+{
+
+    msg << "Krecem sa izvrsavanjem instrukcije " << pc << " - " << instr;
+    cLog(msg);
+
+    uint32_t adresa = getReg(instr.rs1).val + instr.imm.val;
+    Address addr = {adresa};
+
+    if (!reservation_active || load_reservation_address.val != addr.val)
+    {
+        // Neuspeh: ne upisujemo ništa, u rd stavljamo 1 (error)
+        registers[instr.rd] = {1}; // Neuspeh
+        reservation_active = false;
+        stalling = false; //
+        // PC će se uvećati u execute() jer nismo u stall-u
+        msg << "Neuspesno izvrsena instrukcija " << pc << " - " << instr << ". " << instr.rd << " = 1.";
+        cLog(msg);
+        return;
+    }
+    // store conditional op
+    // sc rd, rs2, 0(rs1) -> Store Conditional
+
+    if (cacheController->isResponding()) // busy, u procesu slanja
+    {
+        msg << "Ne bi trebalo nikada da se desi";
+        cLog(msg, ERROR);
+        return;
+    }
+
+    msg << instr << " instrukcija moze da se izvrsi, kontroler kesa nije zauzet";
+    cLog(msg);
+
+    pendingAddr = {adresa};
+    Data data = {getReg(instr.rs2)};
+    pendingData = data; // Podatak koji želimo da upišemo
+    stalling = true;
+    stallStartCycle = Simulation::cycleCount;
+
+    pristupiMem++;
+    // Uspeh: upisujemo vrednost i u rd stavljamo 0
+
+    CacheState state = cacheController->getState(addr);
+    if (cacheController->isHit(addr))
+    {
+        // M S E su hit
+        // M i E - ne ide se na magistralu
+        // S i I - ide se na magistralu
+        msg << "Pogodak u kesu pri pisanju podatka " << data << " na adresu " << addr;
+        cLog(msg);
+
+        cacheHits++;
+
+        if (state == CacheState::E || state == CacheState::M)
+        {
+            cacheController->startInternalWrite(addr, data);
+            // Imamo ekskluzivno pravo, možemo odmah upisati lokalno
+            // ukupno 2 ciklusa - 1 za pristup i 1 za dek. instr.
+            // E, magistrala tiha, samo prelazi u M
+            // ako je M, ostaje u M
+            // Uspeh će biti upisan u finnishPendingInstruction
+        }
+        else if (state == CacheState::S)
+        {
+            // ako je S, stavlja upgrade signal na magistralu
+            cacheController->broadcastInvalidate(addr);
+        }
+    }
+    else
+    {
+        // I stanje, ide se na magistralu
+        cacheController->writeMiss(addr, data);
+        cacheMisses++;
+        // zbog prirode programa nece se nikad desiti..
         // kako znati da je upis uspeo? treba potvrda sa magistrale, tek onda registar na nulu i fleg menjati
     }
 }
@@ -339,13 +427,16 @@ void CPU::finnishPendingInstruction()
         registers[instr.rd] = dataFromCache;
         load_reservation_address = pendingAddr;
         reservation_active = true;
+
+        msg << "Izvrsena instrukcija " << pc << " - " << instr << ".";
+        cLog(msg);
         cacheController->armMonitor({load_reservation_address}); // cc je taj koji nadgleda adresu
-        std::cout << Simulation::cycleCount << " " << cpuName << ": Izvrsena instrukcija " << instr << ".\n";
     }
     else if (instr.mnemonic == "ld")
     {
         registers[instr.rd] = dataFromCache;
-        std::cout << Simulation::cycleCount << " " << cpuName << ": Izvrsena instrukcija " << instr << ".\n";
+        msg << "Izvrsena instrukcija " << pc << " - " << instr << ".";
+        cLog(msg);
     }
     else if (instr.mnemonic == "sc")
     {
@@ -355,11 +446,25 @@ void CPU::finnishPendingInstruction()
         {
             // Uspeh
             // ovde promena stanja (ovo je nakon ack sa magistrale ili nakon sto je prosao latency za local hit)
+            // TO DO da bude u CC ovo
+            msg << "Upisan podatak " << pendingData << " na adresu " << pendingAddr;
+            cacheController->ccLog(msg);
+            CacheState currentState = cacheController->getState(pendingAddr);
+            if (currentState != CacheState::M)
+            {
+                msg << "Promena stanja bloka iz " << currentState << " u M.";
+                cacheController->ccLog(msg);
+            }
+            else
+            {
+                msg << "Blok ostaje u stanju M.";
+                cacheController->ccLog(msg);
+            }
             cacheController->storeData(Address{pendingAddr}, {pendingData});
-            std::cout << Simulation::cycleCount << " " << cacheController->getController() << ": Upisan podatak " << pendingData.val << " na adresu " << pendingAddr.val << ", promena stanja bloka iz " << cacheController->getState(pendingAddr) << " u M.\n";
             cacheController->setState(CacheState::M, {pendingAddr}); // koje god da je bilo nakon uspesnog upisa ide u M
             registers[instr.rd] = {0};                               // USPEH
-            std::cout << Simulation::cycleCount << " " << cpuName << ": Uspesno izvrsena instrukcija " << instr << ". " << instr.rd << " = 0.\n";
+            msg << "Uspesno izvrsena instrukcija " << pc << " - " << instr << ". " << instr.rd << " = 0.";
+            cLog(msg);
         }
         else
         {
@@ -367,13 +472,43 @@ void CPU::finnishPendingInstruction()
             // nema upisa, ostaje stara vrednost
             // Neko nas je preduhitrio dok smo čekali na magistralu!
             registers[instr.rd] = {1}; // NEUSPEH
-            std::cout << Simulation::cycleCount << " " << cpuName << ": Neuspesno izvrsena instrukcija " << instr << ". " << instr.rd << " = 1.\n";
+            msg << "Neuspesno izvrsena instrukcija " << pc << " - " << instr << ". " << instr.rd << " = 1.";
+            cLog(msg);
         }
         reservation_active = false; // Svakako se briše
     }
     else if (instr.mnemonic == "st")
     {
-        std::cout << Simulation::cycleCount << " " << cpuName << ": Izvrsena instrukcija " << instr << ".\n";
+        msg << "Upisan podatak " << pendingData << " na adresu " << pendingAddr;
+        cacheController->ccLog(msg);
+        CacheState currentState = cacheController->getState(pendingAddr);
+        if (currentState != CacheState::M)
+        {
+            msg << "Promena stanja bloka iz " << currentState << " u M.";
+            cacheController->ccLog(msg);
+        }
+        else
+        {
+            msg << "Blok ostaje u stanju M.";
+            cacheController->ccLog(msg);
+        }
+        cacheController->storeData(Address{pendingAddr}, {pendingData});
+        cacheController->setState(CacheState::M, {pendingAddr}); // koje god da je bilo nakon uspesnog upisa ide u M
+        msg << "Izvrsena instrukcija " << pc << " - " << instr << ".";
+        cLog(msg);
         // ne vraca nista u registre
+        // promene stanja
     }
+}
+
+void CPU::cLog(std::stringstream &ss, LogLevel level)
+{
+    ::log(ss, cpuName, level);
+}
+
+void CPU::statIspis()
+{
+    double stopaPog = cacheHits / (double)pristupiMem * 100;
+    msg << cpuName << ": broj pristupa = " << pristupiMem << ", broj pogodaka: " << cacheHits << ", broj promasaja: " << cacheMisses << ", stopa pogodaka: " << std::fixed << std::setprecision(2) << stopaPog << "%";
+    log(msg, "SYS");
 }

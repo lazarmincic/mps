@@ -28,13 +28,15 @@ private:
 
     uint64_t cacheHits;   // statistika, broj pogodaka u kešu ovog procesora
     uint64_t cacheMisses; // analogno broj promašaja
+    uint64_t pristupiMem;
 
     uint64_t stallCycles;     // ukoliko se podatak "dovlači", koliko proc. čeka na njega?
     uint64_t stallStartCycle; // ciklus globalnog sata od kog se čeka
     Address pendingAddr;      // adresa koju koristi trenutna instrukcija koja čeka na podatak
     Data pendingData;
 
-    std::string cpuName; // za debug, ime proc.
+    std::string cpuName;   // za debug, ime proc.
+    std::stringstream msg; // za ispis
 
 public:
     CPU(const std::string &name); // konstruktor
@@ -49,6 +51,8 @@ public:
 
     bool isDone() const; // getter za done
 
+    void statIspis();
+
 private:
     int findLabelIndex(const std::string &name);   // vraća index instrukcije na koju se odnosi labela
     Data getReg(const std::string &regName) const; // vraća vrednost registra na osnovu imena registra
@@ -60,6 +64,8 @@ private:
     void handleStore(const Instruction &instr);
     void handleStoreCond(const Instruction &instr);
     void finnishPendingInstruction(); // poziva se nakon što se čekanje na podatak završilo
+
+    void cLog(std::stringstream &ss, LogLevel level = maxLogLevel);
 };
 
 #endif

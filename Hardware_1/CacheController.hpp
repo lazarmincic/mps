@@ -23,6 +23,7 @@ private:
     bool reservationBroken; // Zastavica koju procesor proverava
     BusTransaction pendingTransactionType;
     CacheState pendingState;
+    std::stringstream msg; // za ispis
 
 public:
     CacheController(Controller contr);
@@ -68,12 +69,12 @@ public:
 
     bool isReservationBroken() const;
 
+    void resetBusy();
+    void ccLog(std::stringstream &ss, LogLevel level = maxLogLevel);
+
 private:
-    int findLineInCache(Address address);
     CacheLine getCacheLine(Address address);
-    static uint32_t addressToIndex(Address address);
     void setCacheLine(Address address, CacheLine cacheLine);
-    void snoopingDone();
     void localDone();
 };
 

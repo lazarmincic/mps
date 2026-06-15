@@ -13,14 +13,19 @@ CacheController::CacheController(Controller contr)
     reservationBroken = false;
     pendingTransactionType = BusTransaction::IDLE;
     pendingState = CacheState::I;
-    std::cout << "Sys: " << myCC << " na mrezi.\n";
+    msg << "Na mrezi.";
+    ccLog(msg);
+}
+
+CacheLine CacheController::getCacheLine(Address address)
+{
+    return cache[address.val];
 }
 
 bool CacheController::isHit(Address address)
 {
     CacheLine cacheLine = getCacheLine(address);
-    uint32_t tag = (address.val >> 3);
-    return (cacheLine.tag == tag && cacheLine.state.getState() != CacheState::I);
+    return (cacheLine.state != CacheState::I);
 }
 
 Data CacheController::getData(Address address)
@@ -30,41 +35,27 @@ Data CacheController::getData(Address address)
 
 CacheState CacheController::getState(Address address)
 {
-    return getCacheLine(address).state.getState();
+    return getCacheLine(address).state;
+}
+
+void CacheController::setCacheLine(Address address, CacheLine cacheLine)
+{
+    cache[address.val] = cacheLine;
+    stateOfCache();
 }
 
 void CacheController::setState(CacheState state, Address address)
 {
     CacheLine toChange = getCacheLine(address);
-    toChange.state.setState(state);
+    toChange.state = state;
     setCacheLine(address, toChange);
-}
-
-CacheLine CacheController::getCacheLine(Address address)
-{
-    uint32_t index = addressToIndex(address);
-    return cache[index];
-}
-
-void CacheController::setCacheLine(Address address, CacheLine cacheLine)
-{
-    cache[addressToIndex(address)] = cacheLine;
-    stateOfCache();
-}
-
-uint32_t CacheController::addressToIndex(Address address)
-{
-    return (address.val >> 2) & 0x1;
 }
 
 void CacheController::storeData(Address address, Data data)
 {
     // keš hit
-    uint32_t index = (address.val >> 2) & 0x1;
-    cache[index].data = data;
-    cache[index].tag = (address.val >> 3);
-    cache[index].state.setM(); // Nakon upisa, linija je Modified
-    // to do. postoji interakcija sa magistralom
+    cache[address.val].data = data;
+    cache[address.val].state = CacheState::M; // Nakon upisa, linija je Modified // bice eksplicitno uradjeno svakako
 }
 
 void CacheController::setBus(Bus *bus)
@@ -80,57 +71,90 @@ void CacheController::snoop(const BusSignal &signal, bool isWinner)
         return;
     }
     Address addr = {signal.address};
-    int setIndex = findLineInCache(addr);
-    std::cout << Simulation::cycleCount << " " << myCC << ": Presretnut signal " << signal.type << " sa magistrale.";
-    if (setIndex != -1)
+    msg << "Presretnut signal " << signal.type << " sa magistrale.";
+    ccLog(msg);
+    if (isHit(addr))
     {
-        std::cout << " Snoop pogodak na adresi " << addr.val << ", stanje " << getState(addr) << ", podatak " << getData(addr).val << ".";
+        msg << "Snoop pogodak na adresi " << addr << ", stanje " << getState(addr) << ", podatak " << getData(addr) << ".";
+        ccLog(msg);
         // snupovana linija JESTE keširana
         // dakle E, M, ili S
-        CacheState state = getState(addr);
+        BusTransaction bt = bus->getCurrentSignal().type;
+        CacheState currentState = getState(addr);
+        pendingState = currentState;
+        Data data = getData(addr);
+        bool flushopt = false;
+        busy = false;
+        // novi signal za magistralu
 
-        if ((state == CacheState::E || state == CacheState::S))
+        if (currentState == CacheState::E)
         {
-            if (signal.type == BusTransaction::READ || signal.type == BusTransaction::WRITE)
+            if (bt == BusTransaction::READ)
             {
-                if (isWinner) // pobedio u arbitrazi
+                pendingState = CacheState::S;
+                msg << "Prelazim u medjustanje ES.";
+                ccLog(msg);
+            }
+            else if (bt == BusTransaction::WRITE)
+            {
+                pendingState = CacheState::I;
+                msg << "Prelazim u medjustanje EI.";
+                ccLog(msg);
+            }
+            // E - on mora dati podatak
+            flushopt = true;
+        }
+        else if (currentState == CacheState::S)
+        {
+
+            if (bt == BusTransaction::READ)
+            {
+                // ostaje u S
+                msg << "Ostajem u stanju S.";
+                ccLog(msg);
+                if (isWinner)
                 {
-                    busy = true;
-                    busyCycles = Latency::REMOTE_CACHE; // Npr. 8 ciklusa za Cache-to-Cache
-                    // ovde arbitracija
-                    std::cout << " Pocinjem sa slanjem podatka " << bus->getCurrentOwner() << "\n";
+                    // pobedio unutrasnju arbitrazu
+                    flushopt = true;
                 }
                 else
                 {
-                    // izgubio arbitrazu
-                    // Kontroler ima podatak, ali drugi kontroler je zadužen za slanje.
-                    // On samo tiho menja svoje stanje bez postavljanja busy.
-                    busy = false;
-                    // Ovde odmah promeni stanje
-                    if (signal.type == BusTransaction::WRITE)
-                    {
-                        if (state == CacheState::S)
-                        {
-                            setState(CacheState::I, addr); // ako gubi arbitraciju, samo menja stanje
-                            // i to mora ovde da se desi kao i sve ostale "tihe" promene stanja
-                            // ako je blok bio u stanju E svakako nema potrebe za arbitracijom
-                            std::cout << " Izgubio sam unutrasnju arbitrazu, tiho prelazim u stanje I.\n";
-                        }
-                    }
+                    // inace ne radi flushopt
                 }
             }
-            else if (signal.type == BusTransaction::UPGRADE)
+            else if (bt == BusTransaction::WRITE)
             {
-                if (state == CacheState::S)
+                if (isWinner)
                 {
-                    std::cout << " Prelazim u stanje I.\n";
-                    setState(CacheState::I, addr);
-                    busy = false;
-                    // nista na magistralu
+                    // pobedio unutrasnju arbitrazu
+                    flushopt = true;
+                    msg << "Prelazim u medjustanje SI.";
+                    ccLog(msg);
+                    // jer flushopt treba vremena da se izvrsi
+                    pendingState = CacheState::I;
                 }
+                else
+                {
+                    // inace ne radi flushopt
+                    pendingState = CacheState::I;
+                    msg << "Izgubio sam unutrasnju arbitrazu. Necu slati podatak, samo prelazim u stanje I.";
+                    ccLog(msg);
+                    setState(CacheState::I, addr);
+                    // moze odmah jer nema magistrale
+                }
+            }
+            else if (bt == BusTransaction::UPGRADE)
+            {
+                msg << "Prelazim u medjustanje SI.";
+                ccLog(msg);
+                pendingState = CacheState::I;
+                busy = true;
+                bus->upgrade();
+                // nista na magistralu
+                // busy mora true jer je kontroler zakocen dok se ne zavrsi upgrade
             }
         }
-        else if (state == CacheState::M)
+        else if (currentState == CacheState::M)
         {
             if (signal.type == BusTransaction::READ || signal.type == BusTransaction::WRITE)
 
@@ -138,34 +162,33 @@ void CacheController::snoop(const BusSignal &signal, bool isWinner)
 
                 // address je vec na magistrali
                 // nextState = CacheState::S;
-                std::cout << " Flush-ujem blok na adresi " << addr.val << " na magistralu.\n";
+                msg << "Flush-ujem blok " << getData(addr) << " na adresi " << addr << " na magistralu.";
+                ccLog(msg);
                 bus->flush({getData(addr)});
                 busy = true;
                 if (signal.type == BusTransaction::READ)
                 {
                     pendingState = CacheState::S;
-                    std::cout << " Prelazim u medjustanje MS.\n";
+                    msg << "Prelazim u medjustanje MS.";
+                    ccLog(msg);
                 }
                 else if (signal.type == BusTransaction::WRITE)
                 {
                     pendingState = CacheState::I;
-                    std::cout << " Prelazim u medjustanje MI.\n";
+                    msg << "Prelazim u medjustanje MI.";
+                    ccLog(msg);
                     // ne prelazi zapravo, vec pamti stanje u koje treba da predje..
                 }
                 // promene stanja nakon sto se zavrsi upis u mem
             }
         }
-        // DODATAK ZA LR/SC:
-        if (signal.type == BusTransaction::WRITE || signal.type == BusTransaction::UPGRADE)
-        {
-            if (monitoredAddress.val == signal.address.val)
-            {
 
-                reservationBroken = true; // Samo podigni zastavicu
-                // ukoliko je trazio magistralu, ponistava se jer mu ona vise nije potrebna, sc moze da se izvrsi sada i bez nje..
-                bus->dropBusRequest(myCC);
-                ready = false;
-            }
+        if (flushopt)
+        {
+            busy = true;
+            bus->flushOpt(data);
+            msg << "Direktno saljem podatak kontroleru " << bus->getCurrentOwner() << ".";
+            ccLog(msg);
         }
     }
     else
@@ -173,22 +196,10 @@ void CacheController::snoop(const BusSignal &signal, bool isWinner)
         // I stanje, jer blok ne postoji u kesu
         // nista na magistralu i ostaje I
         busy = false;
-        std::cout << " Blok u stanju I. Snoop promasaj. Nema promene stanja. Nista na magistralu.\n";
+        msg << "Blok u stanju I. Snoop promasaj. Nema promene stanja. Nista na magistralu.";
+        ccLog(msg);
         return;
     }
-}
-
-int CacheController::findLineInCache(Address address)
-{
-    uint32_t tag = (address.val >> 3);
-    for (int i = 0; i < 2; i++)
-    {
-        if (cache[i].tag == tag && !cache[i].state.isI())
-        {
-            return i;
-        }
-    }
-    return -1; // Nema linije ili je linija I
 }
 
 void CacheController::readMiss(Address address)
@@ -228,7 +239,6 @@ void CacheController::broadcastInvalidate(Address addr)
     bus->requestBus(myCC, signal);
 
     busy = true;
-    busyCycles = Latency::BUS_UPGRADE;
     ready = false;
 }
 
@@ -241,60 +251,78 @@ void CacheController::receiveBusResponse()
 {
     BusTransaction bt = bus->getCurrentSignal().type;
     Address addr = bus->getCurrentSignal().address;
-    if (bt == BusTransaction::READ || bt == BusTransaction::FLUSHOPT || bt == BusTransaction::FLUSH)
+
+    if (bt != BusTransaction::IDLE && bt != BusTransaction::UPGRADE)
     {
         // citanje
         // iz Data u CacheLine konverzija potrebna.
 
-        Data val = bus->getCurrentSignal().data;
+        Data data = bus->getCurrentSignal().data;
         CacheLine newLine;
-        newLine.setAddress(addr);
-        newLine.data = val;
+        newLine.data = data;
         if (bus->sharedLineActive()) // gleda se shared linija
         {
             if (bt == BusTransaction::FLUSHOPT)
             {
-                std::cout << Simulation::cycleCount << " " << myCC << ": Primljen podatak " << val.val << " adrese " << addr.val << " od "
-                          << bus->getCurrentOwner() << ". Promena stanja I -> S\n";
-                newLine.state.setS();
+                msg << "Primljen podatak " << data << " adrese " << addr << " od "
+                    << bus->getCurrentOwner() << ". Promena stanja iz I u S.";
+                ccLog(msg);
+                newLine.state = CacheState::S;
             }
         }
         else
         {
             if (bt == BusTransaction::READ)
             {
-                std::cout << Simulation::cycleCount << " " << myCC << ": Primljen podatak " << val.val << " adrese " << addr.val << " od MEMC."
-                          << " Promena stanja I -> E\n";
-                newLine.state.setE();
+                msg << "Primljen podatak " << data << " adrese " << addr << " od MEMC." << " Promena stanja iz I u E.";
+                ccLog(msg);
+                newLine.state = CacheState::E;
+            }
+            else if (bt == BusTransaction::WRITE)
+            {
+                msg << "Primljen podatak " << data << " adrese " << addr << " od MEMC. Promena stanja iz I u M.";
+                ccLog(msg);
+                newLine.state = CacheState::M;
             }
         }
         if (bt == BusTransaction::FLUSH)
         {
             if (pendingTransactionType == BusTransaction::READ)
             {
-                std::cout << Simulation::cycleCount << " " << myCC << ": Primljen podatak " << val.val << " adrese " << addr.val << " od MEMC. I -> S\n";
-                newLine.state.setS();
+                msg << "Primljen podatak " << data << " adrese " << addr << " od " << bus->getWinner() << ". Promena stanja iz I u S.";
+                ccLog(msg);
+                newLine.state = CacheState::S;
             }
             else if (pendingTransactionType == BusTransaction::WRITE)
             {
-                std::cout << Simulation::cycleCount << " " << myCC << ": Pokupljen podatak sa magistrale. I -> M\n";
-                newLine.state.setM();
+                msg << "Primljen podatak " << data << " adrese " << addr << " od " << bus->getWinner() << ". Promena stanja iz I u M.";
+                ccLog(msg);
+                newLine.state = CacheState::M;
             }
         }
         setCacheLine(addr, newLine);
 
-        bufferForCPU = val;
+        bufferForCPU = data;
         ready = true;
 
-        std::cout << Simulation::cycleCount << " " << myCC << ": Podatak upisan u interni bafer kontrolera.\n";
+        msg << "Podatak upisan u interni bafer kontrolera.";
+        ccLog(msg);
     }
     // invalidacija
     else if (bt == BusTransaction::UPGRADE)
     {
         ready = true;
         // nema bafera, nema vracanja podataka cpu-u.
-        std::cout << Simulation::cycleCount << " " << myCC << ": Sve invalidacije za adresu " << addr.val << " zavrsene (ack).\n";
+        msg << "Sve invalidacije za adresu " << addr << " zavrsene (ack).";
+        ccLog(msg);
         // promene stanja i upis su u CPU
+        // to do upis i promena stanja u M premesti ga ovde
+        busy = false;
+    }
+    else
+    {
+        msg << "Greska";
+        ccLog(msg, ERROR);
     }
 }
 
@@ -310,58 +338,141 @@ void CacheController::resetReady()
 
 void CacheController::startInternalRead(Address address)
 {
-    bufferForCPU = getCacheLine(address).data;
+    bufferForCPU = getCacheLine(address).data; // kasnije
     busy = true;
     busyCycles = Latency::HIT; // TO DO: preimenuj ovo bez snoop - u ovom slucaju snoop se ne desava
     ready = false;
     // lokalni pogodak u kesu za citanje
-    std::cout << Simulation::cycleCount << " " << myCC << ": Krenuo da citam podatak na adresi " << address.val << ".\n";
+    msg << "Krenuo da citam podatak na adresi " << address << ".";
+    ccLog(msg);
 }
 
 void CacheController::startInternalWrite(Address address, Data data)
 {
+    msg << "Krenuo da pisem podatak " << data << " na adresu " << address << ".";
+    ccLog(msg);
+    // buffer nema smisla za pisanje
     busy = true;
     busyCycles = Latency::HIT;
     ready = false;
-    std::cout << Simulation::cycleCount << " " << myCC << ": Krenuo da pisem podatak " << data.val << " na adresu " << address.val << ".\n";
 }
 
 void CacheController::tick()
 {
     if (busy)
     {
-        // bez brojaca - flush
+        // bez brojaca - flush / flush opt
         if (bus->isAcknowledge())
         {
             if (bus->getCurrentSignal().type == BusTransaction::FLUSH)
             {
-                // podatak dostavljen masteru
-                // promeni stanje samo, podatak je pokupljen u recieveBusResponse()
-                busy = false;
+                if (bus->getWinner() == myCC)
+                {
+                    // podatak dostavljen masteru
+                    // master podatak kupi u recieveBusResponse()
+                    // ovo je slave, on samo menja stanje
+                    busy = false;
+                    Address addr = bus->getCurrentSignal().address;
+                    CacheState currentState = getState(addr);
+                    msg << "Flush gotov.";
+                    ccLog(msg);
+                    if (currentState != pendingState)
+                    {
+                        msg << "Menjam stanje iz " << currentState << " u " << pendingState << ".";
+                        ccLog(msg);
+                        setState(pendingState, addr);
+                    }
+                    else
+                    {
+                        msg << "Ostajem u stanju " << currentState << ".";
+                        ccLog(msg);
+                    }
+                    ready = true;
+                    return;
+                }
+            }
+            else if (bus->getCurrentSignal().type == BusTransaction::FLUSHOPT)
+            {
+                if (bus->getWinner() == myCC)
+                {
+                    busy = false;
+                    Address addr = bus->getCurrentSignal().address;
+                    CacheState currentState = getState(addr);
+                    msg << "Flush-opt gotov.";
+                    ccLog(msg);
+                    if (currentState != pendingState)
+                    {
+                        msg << "Blok na adresi " << addr << " menja stanje iz " << currentState << " u " << pendingState << ".";
+                        ccLog(msg);
+                        setState(pendingState, addr);
+                    }
+                    else
+                    {
+                        msg << "Blok na adresi " << addr << " ostaje u stanju " << currentState << ".";
+                        ccLog(msg);
+                    }
+                    ready = true;
+                    return;
+                }
+            }
+            else if (bus->getCurrentSignal().type == BusTransaction::UPGRADE)
+            {
+                // kako znati da je to bas on?
                 Address addr = bus->getCurrentSignal().address;
-                std::cout << Simulation::cycleCount << " " << myCC << " Flush gotov. " << getState(addr) << " -> " << pendingState << "\n";
-                setState(pendingState, addr);
-                ready = true;
-                return;
+                CacheState state = getState(addr);
+                Controller master = bus->getCurrentOwner();
+                if (state == CacheState::S && myCC != master) // nisam ja taj koji je master na magistrali (slao upgrade)
+                {
+                    msg << "Upgrade gotov.";
+                    ccLog(msg);
+                    // to je on, ima podatak na toj adresi u s i desava se upgrade
+                    busy = false;
+                    if (state != pendingState)
+                    {
+                        msg << "Blok na adresi " << addr << " menja stanje iz " << state << " u " << pendingState << ".";
+                        ccLog(msg);
+                        setState(pendingState, addr);
+                    }
+                    else
+                    {
+                        msg << "Blok na adresi " << addr << " ostaje u stanju " << state << ".";
+                        ccLog(msg);
+                    }
+
+                    ready = true;
+                    // DODATAK ZA LR/SC:
+                    if (monitoredAddress.val == addr.val)
+                    {
+
+                        reservationBroken = true; // Samo podigni zastavicu
+                        // ukoliko je trazio magistralu, ponistava se jer mu ona vise nije potrebna, sc moze da se izvrsi sada i bez nje..
+                        bus->dropBusRequest(myCC);
+                        msg << "Odustajem od pristupa magistrali.";
+                        ccLog(msg);
+                    }
+
+                    return;
+                }
+            }
+            else if (bus->getCurrentSignal().type == BusTransaction::WRITE)
+            {
+                // PROVERI DA LI JE NARUSENA REZERVACIJA TO DO
+                msg << "Nikad se nece desiti za ovaj program";
+                ccLog(msg, ERROR);
             }
         }
         if (busyCycles > 0)
         {
-            busyCycles--;
-        }
-        else
-        {
-            // stanje se menja nakon sto vreme istekne
-            BusTransaction bt = bus->getCurrentSignal().type;
-            if (bt == BusTransaction::READ || bt == BusTransaction::WRITE)
+            busyCycles--; // local hit - tada je uzrok kasnjenja kes
+            if (busyCycles == 0)
             {
-                snoopingDone();
-            }
-            else if (bt == BusTransaction::IDLE)
-            {
+                // stanje se menja nakon sto vreme istekne
                 // local read/write done
                 localDone();
             }
+        }
+        else
+        {
         }
     }
     else
@@ -371,62 +482,12 @@ void CacheController::tick()
     }
 }
 
-void CacheController::snoopingDone()
-{
-    // VREME JE ISTEKLO: Stavljamo podatak na magistralu
-    BusSignal busSignal = bus->getCurrentSignal();
-
-    Address addr = busSignal.address;
-    CacheState currentState = getState(addr);
-    CacheState nextState = currentState;
-    busSignal.data = getData(addr);
-
-    // ovde promene stanja
-
-    if (currentState == CacheState::E)
-    {
-
-        if (busSignal.type == BusTransaction::READ)
-        {
-            busSignal.type = BusTransaction::FLUSHOPT;
-            nextState = CacheState::S;
-            std::cout << Simulation::cycleCount << " " << myCC << ": FlushOpt završen nakon " << (unsigned int)Latency::REMOTE_CACHE << " ciklusa. ";
-        }
-        else if (busSignal.type == BusTransaction::WRITE)
-        {
-            busSignal.type = BusTransaction::FLUSHOPT;
-            nextState = CacheState::I;
-            std::cout << Simulation::cycleCount << " " << myCC << ": FlushOpt završen nakon " << (unsigned int)Latency::REMOTE_CACHE << " ciklusa. ";
-        }
-    }
-
-    else if (currentState == CacheState::S)
-    {
-        if (busSignal.type == BusTransaction::READ)
-        {
-            busSignal.type = BusTransaction::FLUSHOPT;
-            // ostaje u S
-            std::cout << Simulation::cycleCount << " " << myCC << ": FlushOpt završen nakon " << (unsigned int)Latency::REMOTE_CACHE << " ciklusa. ";
-        }
-        else if (busSignal.type == BusTransaction::WRITE)
-        {
-            busSignal.type = BusTransaction::FLUSHOPT;
-            nextState = CacheState::I;
-            std::cout << Simulation::cycleCount << " " << myCC << ": FlushOpt završen nakon " << (unsigned int)Latency::REMOTE_CACHE << " ciklusa. ";
-        }
-    }
-
-    std::cout << "Direktno saljem podatak kontroleru " << bus->getCurrentOwner() << ". Stanje podatka " << busSignal.data.val << " na adresi " << addr.val << " prelazi iz " << currentState << " u " << nextState << ". Nema pristupa RAM-u.\n";
-    setState(nextState, addr);
-    busy = false;
-    bus->putDataOnBus(busSignal);
-}
-
 void CacheController::localDone()
 {
     // SADA je prošao tačno jedan ciklus
     // ovde za pogodak prilikom pisanja kad nema magistrale
-    std::cout << Simulation::cycleCount << " " << myCC << ": Zavrsen lokalni upis / citanje\n";
+    msg << "Zavrsen lokalni upis / citanje";
+    ccLog(msg);
     ready = true;
     busy = false;
 }
@@ -438,18 +499,29 @@ bool CacheController::isResponding()
 
 void CacheController::stateOfCache()
 {
-    std::cout << Simulation::cycleCount << " " << myCC << ": Stanje kesa - Blok 0: " << cache[0] << "; Blok 1: "
-              << cache[1] << "\n";
+    msg << "Stanje kesa - Blok 0: " << cache[0] << "; Blok 1: " << cache[1];
+    ccLog(msg);
 }
 
 void CacheController::armMonitor(Address addr)
 {
     monitoredAddress = addr;
     reservationBroken = false;
-    std::cout << Simulation::cycleCount << " " << myCC << ": Postavljena rezervacija na adresu " << addr.val << ".\n";
+    msg << "Postavljena rezervacija na adresu " << addr << ".";
+    ccLog(msg);
 }
 
 bool CacheController::isReservationBroken() const
 {
     return reservationBroken;
+}
+
+void CacheController::resetBusy()
+{
+    busy = false;
+}
+
+void CacheController::ccLog(std::stringstream &ss, LogLevel level)
+{
+    ::log(ss, toString(myCC), level);
 }

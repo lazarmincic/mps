@@ -12,6 +12,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <filesystem>
+#include <iomanip>
 
 namespace fs = std::filesystem;
 
@@ -24,17 +25,23 @@ enum Latency : uint8_t
     MEMORY = 80       // pristup memoriji
 };
 
+std::ostream &operator<<(std::ostream &os, const Latency &latency);
+
 // wrapper za adresu (lako se pobrka uint i int)
 struct Address
 {
     uint32_t val;
 };
 
+std::ostream &operator<<(std::ostream &os, const Address &address);
+
 // analogno za podatke
 struct Data
 {
     int32_t val;
 };
+
+std::ostream &operator<<(std::ostream &os, const Data &data);
 
 // tip instrukcije, riscv notatura
 enum class InstructionType : uint8_t
@@ -47,6 +54,8 @@ enum class InstructionType : uint8_t
     J,
     UNKNOWN
 };
+
+std::ostream &operator<<(std::ostream &os, const InstructionType &it);
 
 // ovo je format instrukcije sa kojim će cpu raditi
 struct Instruction
@@ -62,62 +71,9 @@ struct Instruction
     std::string label; // Labela za skokove (npr. "try_lock")
 
     Instruction() : type(InstructionType::UNKNOWN), imm({0}) {}
-
-    friend std::ostream &operator<<(std::ostream &os, const Instruction &instr)
-    {
-        os << instr.mnemonic << " [";
-
-        // Ispis tipa instrukcije
-        switch (instr.type)
-        {
-        case InstructionType::R:
-            std::cout << "R-type";
-            break;
-        case InstructionType::I:
-            std::cout << "I-type";
-            break;
-        case InstructionType::S:
-            std::cout << "S-type";
-            break;
-        case InstructionType::B:
-            std::cout << "B-type";
-            break;
-        case InstructionType::U:
-            std::cout << "U-type";
-            break;
-        case InstructionType::J:
-            std::cout << "J-type";
-            break;
-        case InstructionType::UNKNOWN:
-            std::cout << "UNKNOWN";
-            break;
-        }
-
-        std::cout << "]";
-
-        if (!instr.rd.empty())
-        {
-            std::cout << " rd=" << instr.rd;
-        }
-        if (!instr.rs1.empty())
-        {
-            std::cout << " rs1=" << instr.rs1;
-        }
-        if (!instr.rs2.empty())
-        {
-            std::cout << " rs2=" << instr.rs2;
-        }
-        if (instr.imm.val != 0)
-        {
-            std::cout << " imm=" << instr.imm.val;
-        }
-        if (!instr.label.empty())
-        {
-            std::cout << " label=" << instr.label;
-        };
-        return os;
-    }
 };
+
+std::ostream &operator<<(std::ostream &os, const Instruction &instr);
 
 // potrebna još i mapa labela da bi procesor mogao da izvrši prog. skokove
 struct ExecutableProgram
@@ -126,6 +82,8 @@ struct ExecutableProgram
     std::map<std::string, int> labelMap;
     std::string programName; // debug ispis
 };
+
+void progIspis(ExecutableProgram prog);
 
 // svaki kontroler ima svoj unos
 enum class Controller : uint8_t
@@ -136,9 +94,10 @@ enum class Controller : uint8_t
     CC2,
     MEMC // kada memorija odgovara
 };
-
 // Preklapanje operatora (mora biti izvan enuma)
-std::ostream &operator<<(std::ostream &os, const Controller &controller);
+std::string toString(const Controller &cntrl);
+
+std::ostream &operator<<(std::ostream &os, const Controller &cntrl);
 
 // MESI stanja u kojim se keš linija može naći
 enum class CacheState : uint8_t
@@ -151,119 +110,16 @@ enum class CacheState : uint8_t
 
 std::ostream &operator<<(std::ostream &os, const CacheState &state);
 
-// MESI stanja, bit po bit (niži nivo)
-struct StateBits
-{
-    uint8_t modified : 1; // prljav (1) ili čist (0)
-    uint8_t shared : 1;   // deljen (1) ili eksluzivan (0)
-
-    // izuzetak je I stanje - nije prisutan u kešu ili linija prisutna ali nije validna (11)
-
-    void setS()
-    {
-        modified = 0;
-        shared = 1;
-    }
-    void setM()
-    {
-        modified = 1;
-        shared = 0;
-    }
-    void setE()
-    {
-        modified = 0;
-        shared = 0;
-    }
-    void setI()
-    {
-        modified = 1;
-        shared = 1;
-    }
-    void setState(CacheState cacheState)
-    {
-        switch (cacheState)
-        {
-        case CacheState::E:
-            setE();
-            break;
-        case CacheState::M:
-            setM();
-            break;
-        case CacheState::S:
-            setS();
-            break;
-        default:
-            setI();
-        }
-    }
-
-    // Brze proveraške stanja
-    bool isM() const { return modified == 1 && shared == 0; } // Modified
-    bool isE() const { return modified == 0 && shared == 0; } // Exclusive
-    bool isS() const { return modified == 0 && shared == 1; } // Shared
-    bool isI() const { return modified == 1 && shared == 1; } // Invalid
-
-    // Getter koji vraća enum reprezentaciju stanja
-    CacheState getState() const
-    {
-        if (isM())
-        {
-            return CacheState::M;
-        }
-        if (isE())
-        {
-            return CacheState::E;
-        }
-        if (isS())
-        {
-            return CacheState::S;
-        }
-        return CacheState::I;
-        return CacheState::I; // default
-    };
-
-    StateBits() : modified(1), shared(1) {} // konstrutor se poziva pri pravljenju strukture
-
-    // sve linije počinju u I (11) stanju
-};
-
 // izgled jedne linije keša
 struct CacheLine
 {
-    StateBits state; // stanje keš linije (MESI)
-    Data data;       // 32-bitni podatak u kešu
+    CacheState state; // stanje keš linije (MESI)
+    Data data;        // 32-bitni podatak u kešu
 
-    // Dekompozicija 32-bitne adrese:
-    // [31:3] = tag (29 bita)
-    // [2]    = index (1 bit) - bira jedan od 2 seta
-    // [1:0]  = offset (2 bita) - pozicija unutar 32-bitne reči
-
-    uint32_t tag : 29;  // viši bitovi adrese (bitovi 31:3)
-    uint8_t index : 1;  // izbor seta (bit 2)
-    uint8_t offset : 2; // offset unutar linije (bitovi 1:0)
-
-    CacheLine() : data({0}), tag(0), index(0), offset(0) {} // keš kreće "hladan"
-
-    // SETER
-    void setAddress(Address addr)
-    {
-        tag = (addr.val >> 3);
-        index = (addr.val >> 2) & 0x1;
-        offset = addr.val & 0x3;
-    }
-
-    // GETER
-    Address getAddress() const
-    {
-        return {(tag << 3) | (index << 2) | offset};
-    }
-
-    friend std::ostream &operator<<(std::ostream &os, const CacheLine &cl)
-    {
-        os << "State: " << cl.state.getState() << ", Address: " << cl.getAddress().val << ", Data: " << cl.data.val;
-        return os;
-    }
+    CacheLine() : state(CacheState::I), data({0}) {} // keš kreće "hladan"
 };
+
+std::ostream &operator<<(std::ostream &os, const CacheLine &line);
 
 // tip transakcija na magistrali
 enum class BusTransaction : uint8_t
@@ -294,15 +150,20 @@ public:
     // globalni brojac
 };
 
-namespace Color // za ispis sa bojama u konzoli
+// za log
+enum LogLevel
 {
-    const std::string RESET = "\033[0m";
-    const std::string RED = "\033[31m";
-    const std::string GREEN = "\033[32m";
-    const std::string YELLOW = "\033[33m";
-    const std::string BLUE = "\033[34m";
-    const std::string MAGENTA = "\033[35m";
-    const std::string CYAN = "\033[36m";
-    const std::string BOLD = "\033[1m";
-}
+    DEBUG,
+    INFO,
+    WARN,
+    ERROR,
+    FATAL
+};
+
+extern LogLevel maxLogLevel;
+
+void log(std::stringstream &ss, std::string comp, LogLevel level = maxLogLevel);
+
+void podesiZaglavljeHtml();
+
 #endif

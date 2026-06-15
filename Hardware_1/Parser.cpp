@@ -11,7 +11,9 @@ ExecutableProgram Parser::parseFile(const std::string &filename)
     Uzima path do ulaznog tekstualnog fajla sa pseudoinstrukcijama
     Izlaz su instrukcije učitane u strukturu ExecutableProgram, koju klasa CPU direktno može da povuče i izvrši
     */
-    std::cout << "Parsiram datoteku " << filename << "\n";
+    std::stringstream msg;
+    msg << "Parsiram datoteku " << filename;
+    log(msg, "SYS");
     ExecutableProgram prog;
     fs::path p = filename;
     prog.programName = p.stem().string(); // bez ekstenzije
