@@ -1,8 +1,7 @@
 #include <iostream>
 #include <string.h>
 #include "Iscrtavanje.hpp"
-
-using namespace cv;
+#include <SFML/Graphics.hpp>
 
 
 int main(int argc, char** argv )
@@ -30,8 +29,6 @@ int main(int argc, char** argv )
     // ------------------------
     
     bool hard_mode = (strcmp(argv[2], "hard") == 0);
-
-    std::cout << "Kontrole: A / ← (Levo), D / → (Desno), ESC (Izlaz)\n";
 
     Iscrtavanje ekran(broj_asteroida, hard_mode);
     ekran.pokreniPetljuPrikaza();

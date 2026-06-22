@@ -1,27 +1,22 @@
-CXX = g++
-
-CXXFLAGS = -O3 -Wall -std=c++17 -g
-
-OPENCV_CFLAGS = $(shell pkg-config --cflags opencv4)
-
-OPENCV_LIBS = $(shell pkg-config --libs opencv4)
-
-CXXFLAGS += $(OPENCV_CFLAGS)
-LDFLAGS = $(OPENCV_LIBS)
-
+CC = g++
+CFLAGS = -std=c++17 -Wall
+LIBS = -lsfml-graphics -lsfml-window -lsfml-system -pthread
 TARGET = SpaceDefender
 
-SRCS = main.cpp Iscrtavanje.cpp NitAsteroida.cpp NitBroda.cpp  Merac.cpp NitMetaka.cpp
+ARGS = 2 hard
 
-ARGS = 5 standard
+SRCS = main.cpp Iscrtavanje.cpp NitBroda.cpp NitAsteroida.cpp NitMetaka.cpp Merac.cpp
 
-all: $(TARGET)
+OBJS = $(SRCS:.cpp=.o)
 
-$(TARGET): $(SRCS)
-	$(CXX) $(CXXFLAGS) $(SRCS) -o $(TARGET) $(LDFLAGS)
+$(TARGET): $(OBJS)
+	$(CC) $(OBJS) -o $(TARGET) $(LIBS)
+
+%.o: %.cpp
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(OBJS) $(TARGET)
 
 run:
-	./$(TARGET) $(ARGS)
+	DISPLAY=:0 ./$(TARGET) $(ARGS)

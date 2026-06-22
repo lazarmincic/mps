@@ -10,10 +10,10 @@ public:
     static const int MAX_METAKA = 25;
 private:
     pthread_t nit_id;
-    int x_crtanje [MAX_METAKA];
-    int y_crtanje [MAX_METAKA];
-    int x_fizika [MAX_METAKA];
-    int y_fizika [MAX_METAKA];
+    double x_crtanje [MAX_METAKA];
+    double y_crtanje [MAX_METAKA];
+    double x_fizika [MAX_METAKA];
+    double y_fizika [MAX_METAKA];
     int broj_metaka_crtanje = 0;
     int broj_metaka_fizika = 0;
     static void* statickiMost(void* arg);
@@ -23,7 +23,7 @@ private:
     int skor = 0;
     PozicijeSvih* tabla;
     bool radi = true;
-    static const int BRZINA_PO_SEKUNDI = Postavke::VISINA_EKRANA*2;
+    const double BRZINA_PO_SEKUNDI = Postavke::VISINA_EKRANA*1.1;
     int max_asteroida = Postavke::LIMIT_ASTEROIDA;
     const int fps = 60;
     pthread_cond_t uslov_aktivacije;
@@ -39,8 +39,8 @@ public:
     
     NitMetaka();
     ~NitMetaka();
-    void uzmiPoziciju(int x_out[], int y_out [], int& broj, int& skor_out, int radi_in, int& broj_ast_out);
-    void napraviNovi(int x_brod);
+    void uzmiPoziciju(double x_out[], double y_out [], int& broj, int& skor_out, int radi_in, int& broj_ast_out);
+    void napraviNovi(double x_brod);
     void start();
     void stop();
     void proslediTablu(PozicijeSvih* tabla_sudar);

@@ -5,6 +5,7 @@
 #include "NitMetaka.hpp"
 #include <unistd.h>
 #include <iostream>
+#include <SFML/Window/Keyboard.hpp>
 
 void* NitBroda::statickiMost(void* arg)  
 {
@@ -15,17 +16,16 @@ void* NitBroda::statickiMost(void* arg)
 
 void NitBroda::petljaFizike() {
     Merac brod_fps("BROD");
-    int x_lok_kop;
+    double x_lok_kop;
     x_lok_kop = Postavke::SIRINA_EKRANA / 2;
-    double x_prec = x_lok_kop; 
     const int BROD_SIRINA_EKRAN = B_SIRINA*FAKTOR_SKALIRANJA;
-    double BRZINA_PO_S = Postavke::SIRINA_EKRANA/(double)2.5; // 0.03
+    double BRZINA_PO_S = Postavke::SIRINA_EKRANA/(double)3.5; // 0.03
     const long FRAME_TIME_NS = 1000000000/fps;
     bool radi_lok = true;
-    bool idi_levo = false, idi_desno = false, ispali_metak = false;
     std::chrono::time_point staro_vreme = std::chrono::high_resolution_clock::now();
     std::chrono::steady_clock::time_point vreme_poslednjeg_metka;
-    const int COOLDOWN_METKA_MS = 100;
+    const int COOLDOWN_METKA_MS = 112;
+    bool levo = false, desno = false, pucaj = false;
     while (true) {
         if (radi_lok == false) break;
         std::chrono::time_point trenutno_vreme = std::chrono::high_resolution_clock::now();
@@ -34,31 +34,33 @@ void NitBroda::petljaFizike() {
         staro_vreme = trenutno_vreme;
 
         pthread_mutex_lock(&lock);
-        idi_levo = kontrole.levo.aktivan;
-        idi_desno = kontrole.desno.aktivan;
-        ispali_metak = kontrole.pucaj.aktivan;
         x = x_lok_kop;
         radi_lok = radi;
         pthread_mutex_unlock(&lock);
 
         if (!radi_lok) break;
 
+        //tast
+        levo = sf::Keyboard::isKeyPressed(sf::Keyboard::A) || sf::Keyboard::isKeyPressed(sf::Keyboard::Left);
+        desno = sf::Keyboard::isKeyPressed(sf::Keyboard::D) || sf::Keyboard::isKeyPressed(sf::Keyboard::Right);
+        pucaj = sf::Keyboard::isKeyPressed(sf::Keyboard::W) || sf::Keyboard::isKeyPressed(sf::Keyboard::Space);
+
         double brzina_broda =  dt*BRZINA_PO_S;
-        if (idi_levo) { 
-            if (x_prec - brzina_broda >= 0) {
-                x_prec -= brzina_broda;
+        if (levo) { 
+            if (x_lok_kop - brzina_broda >= 0) {
+                x_lok_kop -= brzina_broda;
             } else {
-                x_prec = 0; 
+                x_lok_kop = 0; 
             }
         }
-        if (idi_desno) { 
-            if (x_prec + brzina_broda <= Postavke::SIRINA_EKRANA - BROD_SIRINA_EKRAN) {
-                x_prec += brzina_broda;
+        if (desno) { 
+            if (x_lok_kop + brzina_broda <= Postavke::SIRINA_EKRANA - BROD_SIRINA_EKRAN) {
+                x_lok_kop += brzina_broda;
             } else {
-                x_prec = Postavke::SIRINA_EKRANA - BROD_SIRINA_EKRAN;
+                x_lok_kop = Postavke::SIRINA_EKRANA - BROD_SIRINA_EKRAN;
             }
         }
-        if (ispali_metak)
+        if (pucaj)
         {
             std::chrono::steady_clock::time_point vreme_tren_metka = std::chrono::steady_clock::now();
             long proslo_ms = std::chrono::duration_cast<std::chrono::milliseconds>(vreme_tren_metka - vreme_poslednjeg_metka).count();
@@ -66,9 +68,8 @@ void NitBroda::petljaFizike() {
                 meci->napraviNovi(x_lok_kop);
                 vreme_poslednjeg_metka = vreme_tren_metka;
             }
+            pucaj = false;
         }
-
-        x_lok_kop = static_cast<int>(x_prec);
 
         std::chrono::time_point vreme_nakon_fizike = std::chrono::high_resolution_clock::now();
         long potroseno_vreme = std::chrono::duration_cast<std::chrono::nanoseconds>(vreme_nakon_fizike - trenutno_vreme).count();
@@ -106,16 +107,15 @@ void NitBroda::start() {
 void NitBroda::stop() {
     int rez = pthread_join(nit_id, nullptr);
     if (rez == 0){
-        std::cout << "Nit broda uspesno joinovana\n";
+        //std::cout << "Nit broda uspesno joinovana\n";
     }
 }
 
 
-int NitBroda::uzmi_poziciju_x_osvezi_kontrole(KontroleIgre kontrole, bool program_radi) { // zove nit 0 
-    int ret;
+double NitBroda::uzmi_poziciju_x_prosledi_radi(bool program_radi) { // zove nit 0 
+    double ret;
     pthread_mutex_lock(&lock);
     ret = x; 
-    this->kontrole = kontrole;
     radi = program_radi;
     pthread_mutex_unlock(&lock);
     return ret;

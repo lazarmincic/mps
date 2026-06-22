@@ -37,7 +37,7 @@ void NitAsteroida::stop() {
     int rez = pthread_join(nit_id, NULL);
     if (rez == 0)
     {
-        std::cout << "Nit asteroida " << i << " uspesno joinovana\n";
+        //std::cout << "Nit asteroida " << i << " uspesno joinovana\n";
     }
     // nebezbedan ispis u debug svrhe.
 }
@@ -46,16 +46,11 @@ void NitAsteroida::petljaFizike() {
     std::stringstream ispis;
     ispis << "ASTEROID " << i;
     Merac ast_fps(ispis.str());
-    const double FAKTOR_OPADANJA = 0.2; // eksp.
-    const double MAX_BRZINA = Postavke::VISINA_EKRANA / 10;
-    const double MIN_BRZINA = Postavke::VISINA_EKRANA / 80;
     
-    double y_prec = 0;
     const long FRAME_TIME_NS = 1000000000/fps;
-    int broj_asteroida, dodatni_asteroidi;
-    dodatni_asteroidi = POCETNI_BROJ_ASTEROIDA - Postavke::MIN_ASTEROIDA;
-    const double POC_BRZINA = MIN_BRZINA + (MAX_BRZINA - MIN_BRZINA) / (1.0 + FAKTOR_OPADANJA * dodatni_asteroidi);
-    const double FAKTOR_BRZINE_PO_ASTEROIDU = (MAX_BRZINA - POC_BRZINA) / (Postavke::LIMIT_ASTEROIDA - POCETNI_BROJ_ASTEROIDA);
+    int broj_asteroida = POCETNI_BROJ_ASTEROIDA;
+    int skor = 0;
+    
     std::random_device rd;
     std::default_random_engine engine(rd());
     std::uniform_int_distribution dist_sirina(0, Postavke::SIRINA_EKRANA - FAKTOR_SKALIRANJA*A_SIRINA);
@@ -74,42 +69,60 @@ void NitAsteroida::petljaFizike() {
         staro_vreme = std::chrono::high_resolution_clock::now();
         pthread_mutex_unlock(&muteks_aktivacije);
     
-        if (!radi) break; 
-
         // provera unistenja
         pthread_mutex_lock(&tabla_sudar->muteks);
         if (tabla_sudar->unisten[i] == true) {
             y = 0;
-            y_prec = 0.0;
             x = dist_sirina(engine);
             tabla_sudar->unisten[i] = false;
         }
-        broj_asteroida= tabla_sudar->broj_asteroida;
+        if (hard_mode && Postavke::REZIM == SAMO_BROJ) {
+            broj_asteroida = tabla_sudar->broj_asteroida;
+        }
+        else if (hard_mode && Postavke::REZIM == SAMO_BRZINA) {
+            skor = tabla_sudar->skor;
+        }
         pthread_mutex_unlock(&tabla_sudar->muteks);
+        if (!radi) break; 
 
         // fizika
-        dodatni_asteroidi = broj_asteroida - Postavke::MIN_ASTEROIDA;
-        brzina_po_sekundi = MIN_BRZINA + (MAX_BRZINA - MIN_BRZINA) / (1.0 + FAKTOR_OPADANJA * dodatni_asteroidi);
-        if (hard_mode)
+        const double FAKTOR_OPADANJA = 0.2; // eksp.
+        const double MAX_BRZINA = Postavke::VISINA_EKRANA / 8;
+        const double MIN_BRZINA = Postavke::VISINA_EKRANA / 40;
+        int dodatni_asteroidi = POCETNI_BROJ_ASTEROIDA - Postavke::MIN_ASTEROIDA;
+        if (!hard_mode){
+            // sto je broj asteroida veci, brzina je manja. brzina se ne menja.
+            dodatni_asteroidi = broj_asteroida - Postavke::MIN_ASTEROIDA;
+            brzina_po_sekundi = MIN_BRZINA + (MAX_BRZINA - MIN_BRZINA) / (1.0 + FAKTOR_OPADANJA * dodatni_asteroidi);
+        }
+        if (hard_mode && Postavke::REZIM == SAMO_BRZINA)
         {
-            brzina_po_sekundi = POC_BRZINA + ((broj_asteroida - POCETNI_BROJ_ASTEROIDA) * FAKTOR_BRZINE_PO_ASTEROIDU);
+            // samo brzina se menja, broj asteroida konstanta.
+            double BRZINA_STD = MIN_BRZINA + (MAX_BRZINA - MIN_BRZINA) / (1.0 + FAKTOR_OPADANJA * dodatni_asteroidi);
+            const double POC_BRZINA = BRZINA_STD/5;
+            const double MAX_BRZINA = BRZINA_STD;
+            
+            brzina_po_sekundi = POC_BRZINA + ((MAX_BRZINA - POC_BRZINA)*(double(skor)/Postavke::WIN_POINTS));
             if (brzina_po_sekundi > MAX_BRZINA) {
                 brzina_po_sekundi = MAX_BRZINA;
             }
         }
-            
-        y_prec += brzina_po_sekundi*dt;
-        if (y_prec >= Postavke::VISINA_EKRANA - A_VISINA*FAKTOR_SKALIRANJA) {
-            y_prec = Postavke::VISINA_EKRANA - A_VISINA*FAKTOR_SKALIRANJA;
+        if (hard_mode && Postavke::REZIM == SAMO_BROJ){
+            // samo broj ast. se menja, brzina konstanta.
+            brzina_po_sekundi = (MAX_BRZINA + MIN_BRZINA)/2;
         }
-        y = static_cast<int>(y_prec);
+            
+        y += brzina_po_sekundi*dt;
+        if (y >= Postavke::VISINA_EKRANA - A_VISINA*FAKTOR_SKALIRANJA) {
+            y = Postavke::VISINA_EKRANA - A_VISINA*FAKTOR_SKALIRANJA;
+        }
 
         pthread_mutex_lock(&tabla_crtanje->muteks);
         tabla_crtanje->x[i] = x;
         tabla_crtanje->y[i] = y;
         radi = tabla_crtanje->program_radi;
         pthread_mutex_unlock(&tabla_crtanje->muteks);
-        if (!radi) break; 
+        
 
         pthread_mutex_lock(&tabla_sudar->muteks);
         tabla_sudar->x[i] = x;

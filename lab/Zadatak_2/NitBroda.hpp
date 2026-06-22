@@ -6,28 +6,17 @@
 
 class NitMetaka;
 
-struct TasterStanje {
-    bool aktivan = false;
-    std::chrono::steady_clock::time_point vreme_poslednjeg_impulsa;
-};
-
-struct KontroleIgre {
-    TasterStanje levo;   
-    TasterStanje desno;  
-    TasterStanje pucaj;
-};
 
 class NitBroda {
 private:
     pthread_t nit_id;
     pthread_mutex_t lock;
-    int x;
+    double x;
     bool radi;
     static void* statickiMost(void* arg);
     void petljaFizike();
     NitMetaka* meci;
-    const int fps = 120;
-    KontroleIgre kontrole;
+    const int fps = 60;
     bool ima_metaka = false;
 public:
     static const int B_VISINA = 12;
@@ -58,7 +47,7 @@ public:
 
     void stop();
 
-    int uzmi_poziciju_x_osvezi_kontrole(KontroleIgre kontrole, bool program_radi) ;
+    double uzmi_poziciju_x_prosledi_radi(bool program_radi) ;
     void proslediMetke(NitMetaka* meci);
 
 };

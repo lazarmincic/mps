@@ -5,8 +5,8 @@
 
 struct PozicijeSvih {
     pthread_mutex_t muteks = PTHREAD_MUTEX_INITIALIZER;
-    int x[Postavke::LIMIT_ASTEROIDA];
-    int y[Postavke::LIMIT_ASTEROIDA];
+    double x[Postavke::LIMIT_ASTEROIDA];
+    double y[Postavke::LIMIT_ASTEROIDA];
     bool unisten [Postavke::LIMIT_ASTEROIDA];
     bool program_radi;
     int skor;
@@ -17,8 +17,8 @@ class NitAsteroida {
     
 private:
     pthread_t nit_id;
-    int x;
-    int y;
+    double x;
+    double y;
     static void* statickiMost(void* arg);
     void petljaFizike();
     bool aktivan;
