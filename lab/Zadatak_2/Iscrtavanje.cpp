@@ -126,7 +126,7 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
         }
 
         // pozadina
-        window.clear(sf::Color::Black);
+        if(!won) window.clear(sf::Color::Black);
 
         // zvezde
         double radijus = 2.0;
@@ -140,7 +140,7 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
                 zvezde[i].x = dist_sirina(engine);
             }
             zvezda_oblik.setPosition(zvezde[i].x - radijus, zvezde[i].y - radijus);
-            window.draw(zvezda_oblik);
+            if (!won) window.draw(zvezda_oblik);
         }
         
         // brod
@@ -170,7 +170,7 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
                 }
                 veliki_piksel.setPosition(ekran_x, ekran_y);
                 veliki_piksel.setFillColor(boja_piksela);
-                window.draw(veliki_piksel);
+                if (!won) window.draw(veliki_piksel);
             }
         }
 
@@ -188,7 +188,7 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
                     sf::RectangleShape veliki_piksel(sf::Vector2f(NitMetaka::FAKTOR_SKALIRANJA, NitMetaka::FAKTOR_SKALIRANJA));
                     veliki_piksel.setPosition(ekran_x, ekran_y);
                     veliki_piksel.setFillColor(boja_piksela);
-                    window.draw(veliki_piksel);
+                    if (!won) window.draw(veliki_piksel);
                 }
             }
         }
@@ -229,7 +229,7 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
                     sf::RectangleShape veliki_piksel(sf::Vector2f(NitAsteroida::FAKTOR_SKALIRANJA, NitAsteroida::FAKTOR_SKALIRANJA));
                     veliki_piksel.setPosition(ekran_x, ekran_y);
                     veliki_piksel.setFillColor(boja_piksela);
-                    window.draw(veliki_piksel);
+                    if (!won) window.draw(veliki_piksel);
                 }
             }
         }
@@ -237,7 +237,7 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
         //score
         std::string tekst_score = "Score: " + std::to_string(skor);
         tekst_objekat.setString(tekst_score);
-        window.draw(tekst_objekat);
+        if (!won) window.draw(tekst_objekat);
         
         window.display();
         
