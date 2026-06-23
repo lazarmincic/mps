@@ -5,7 +5,6 @@
 #include "NitMetaka.hpp"
 #include <unistd.h>
 #include <iostream>
-#include <SFML/Window/Keyboard.hpp>
 
 void* NitBroda::statickiMost(void* arg)  
 {
@@ -25,7 +24,11 @@ void NitBroda::petljaFizike() {
     std::chrono::time_point staro_vreme = std::chrono::high_resolution_clock::now();
     std::chrono::steady_clock::time_point vreme_poslednjeg_metka;
     const int COOLDOWN_METKA_MS = 112;
-    bool levo = false, desno = false, pucaj = false;
+    Taster taster_lok;
+    taster_lok.desno = false;
+    taster_lok.levo = false;
+    taster_lok.pucaj = false;
+
     while (true) {
         if (radi_lok == false) break;
         std::chrono::time_point trenutno_vreme = std::chrono::high_resolution_clock::now();
@@ -33,34 +36,24 @@ void NitBroda::petljaFizike() {
         double dt = proteklo.count(); //delta vreme
         staro_vreme = trenutno_vreme;
 
-        pthread_mutex_lock(&lock);
-        x = x_lok_kop;
-        radi_lok = radi;
-        pthread_mutex_unlock(&lock);
-
         if (!radi_lok) break;
 
-        //tast
-        levo = sf::Keyboard::isKeyPressed(sf::Keyboard::A) || sf::Keyboard::isKeyPressed(sf::Keyboard::Left);
-        desno = sf::Keyboard::isKeyPressed(sf::Keyboard::D) || sf::Keyboard::isKeyPressed(sf::Keyboard::Right);
-        pucaj = sf::Keyboard::isKeyPressed(sf::Keyboard::W) || sf::Keyboard::isKeyPressed(sf::Keyboard::Space);
-
         double brzina_broda =  dt*BRZINA_PO_S;
-        if (levo) { 
+        if (taster_lok.levo) { 
             if (x_lok_kop - brzina_broda >= 0) {
                 x_lok_kop -= brzina_broda;
             } else {
                 x_lok_kop = 0; 
             }
         }
-        if (desno) { 
+        if (taster_lok.desno) { 
             if (x_lok_kop + brzina_broda <= Postavke::SIRINA_EKRANA - BROD_SIRINA_EKRAN) {
                 x_lok_kop += brzina_broda;
             } else {
                 x_lok_kop = Postavke::SIRINA_EKRANA - BROD_SIRINA_EKRAN;
             }
         }
-        if (pucaj)
+        if (taster_lok.pucaj)
         {
             std::chrono::steady_clock::time_point vreme_tren_metka = std::chrono::steady_clock::now();
             long proslo_ms = std::chrono::duration_cast<std::chrono::milliseconds>(vreme_tren_metka - vreme_poslednjeg_metka).count();
@@ -68,8 +61,14 @@ void NitBroda::petljaFizike() {
                 meci->napraviNovi(x_lok_kop);
                 vreme_poslednjeg_metka = vreme_tren_metka;
             }
-            pucaj = false;
+            taster_lok.pucaj = false;
         }
+
+        pthread_mutex_lock(&lock);
+        x = x_lok_kop;
+        radi_lok = radi;
+        taster_lok = taster;
+        pthread_mutex_unlock(&lock);
 
         std::chrono::time_point vreme_nakon_fizike = std::chrono::high_resolution_clock::now();
         long potroseno_vreme = std::chrono::duration_cast<std::chrono::nanoseconds>(vreme_nakon_fizike - trenutno_vreme).count();
@@ -112,11 +111,12 @@ void NitBroda::stop() {
 }
 
 
-double NitBroda::uzmi_poziciju_x_prosledi_radi(bool program_radi) { // zove nit 0 
+double NitBroda::uzmi_poziciju_x_prosledi_radi(bool program_radi, Taster taster) { // zove nit 0 
     double ret;
     pthread_mutex_lock(&lock);
     ret = x; 
     radi = program_radi;
+    this->taster = taster;
     pthread_mutex_unlock(&lock);
     return ret;
 }

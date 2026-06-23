@@ -3,13 +3,21 @@
 #include "Merac.hpp"
 #include "NitAsteroida.hpp"
 #include <random>
-#include <SFML/Graphics.hpp>
 #include <iostream>
+#include "CImg.h"
+
+using namespace cimg_library;
 
 Iscrtavanje::Iscrtavanje(int pocetni_broj, bool hard_mode) {
     pocetni_broj_asteroida = pocetni_broj;
     broj_asteroida = pocetni_broj_asteroida;
     is_hard_mode = hard_mode;
+    if (is_hard_mode && Postavke::REZIM == SAMO_BROJ) {
+        max_asteroida = Postavke::LIMIT_ASTEROIDA;
+    }
+    else {
+        max_asteroida = pocetni_broj_asteroida;
+    }
     asteroidi = new NitAsteroida [max_asteroida];
 }
 
@@ -19,12 +27,6 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
     std::uniform_int_distribution dist_sirina(0, Postavke::SIRINA_EKRANA-1);  // []
     std::uniform_int_distribution dist_visina(0, Postavke::VISINA_EKRANA-1);
 
-    if (is_hard_mode && Postavke::REZIM == SAMO_BROJ) {
-        max_asteroida = Postavke::LIMIT_ASTEROIDA;
-    }
-    else {
-        max_asteroida = pocetni_broj_asteroida;
-    }
     brod.proslediMetke(&meci);
 
     PozicijeSvih tabla_crtanje;
@@ -62,10 +64,6 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
         zvezde[i].x = dist_sirina(engine);
         zvezde[i].y = dist_visina(engine);
     }
-    
-    sf::RenderWindow window(sf::VideoMode(Postavke::SIRINA_EKRANA, Postavke::VISINA_EKRANA), ime_prozora);
-    window.setFramerateLimit(60); /////////////////
-    sf::Event event;
 
     int skor = 0;
     bool won = false;
@@ -87,16 +85,23 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
     Merac grafika_fps("GRAFIKA");
     std::chrono::time_point staro_vreme = std::chrono::high_resolution_clock::now();
 
-    sf::Font font;
-    if (!font.loadFromFile("font.ttf")) {
-        std::cerr << "font.tff datoteka nije pronađena.\n";
-        return;
-    }
-    sf::Text tekst_objekat;
-    tekst_objekat.setFont(font);
-    tekst_objekat.setCharacterSize(20);
-    tekst_objekat.setFillColor(sf::Color::White);
-    tekst_objekat.setPosition(10.f, 10.f);
+    const unsigned char bela[] = { 255, 255, 255 };
+    const unsigned char svetlo_siva[] = { 192, 192, 192 };
+    const unsigned char plava[] = { 0, 191, 255 };
+    const unsigned char tamno_siva[] = { 128, 128, 128 };
+    const unsigned char narandzasta[] = { 221, 31, 19 };
+    const unsigned char tamno_braon[] = { 121, 91, 54 };
+    const unsigned char svetlo_braon[] = { 161, 133, 98 };
+    const unsigned char krem[] = { 208, 192, 170 };
+    const unsigned char crvena[] = {255, 0, 0};
+    const unsigned char zelena[] = {0, 255, 0};
+
+    CImg<unsigned char> platno(Postavke::SIRINA_EKRANA, Postavke::VISINA_EKRANA, 1, 3, 0);
+    CImgDisplay window(platno, ime_prozora);
+    Taster taster;
+    taster.levo = false;
+    taster.desno = false;
+    taster.pucaj = false;
 
     while (true) {
         std::chrono::time_point trenutno_vreme = std::chrono::high_resolution_clock::now();
@@ -104,14 +109,10 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
         double dt = proteklo.count(); //delta vreme 
         staro_vreme = trenutno_vreme;
 
-        while (window.pollEvent(event)) {
-            if (event.type == sf::Event::Closed)
-                window.close();
-        }
-
         // uslov za izlazak
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape) || !window.isOpen()){
+        if (window.is_closed() || window.is_keyESC()) {
             petlja_radi = false;
+            window.close(); 
         }
         if (skor >= Postavke::WIN_POINTS)
         {
@@ -126,12 +127,10 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
         }
 
         // pozadina
-        if(!won) window.clear(sf::Color::Black);
+        if(!won) platno.fill(0);
 
         // zvezde
-        double radijus = 2.0;
-        sf::CircleShape zvezda_oblik(radijus);
-        zvezda_oblik.setFillColor(sf::Color::White);
+        int radijus = 2.0;
         for (int i = 0; i < BROJ_ZVEZDA; i++) {
             // Pomeramo zvezdu nadole 
             zvezde[i].y += BRZINA_ZVEZDE_PO_S * dt;
@@ -139,13 +138,16 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
                 zvezde[i].y = 0;
                 zvezde[i].x = dist_sirina(engine);
             }
-            zvezda_oblik.setPosition(zvezde[i].x - radijus, zvezde[i].y - radijus);
-            if (!won) window.draw(zvezda_oblik);
+            if (!won) platno.draw_circle((int)zvezde[i].x, (int)zvezde[i].y, radijus, bela);
         }
+
+        taster.levo = window.is_keyARROWLEFT() || window.is_keyA();
+        taster.desno = window.is_keyARROWRIGHT() || window.is_keyD();
+        taster.pucaj = window.is_keySPACE() || window.is_keyW();
         
         // brod
         double brod_x, brod_y; // lokalne prom
-        brod_x = brod.uzmi_poziciju_x_prosledi_radi(petlja_radi);
+        brod_x = brod.uzmi_poziciju_x_prosledi_radi(petlja_radi, taster);
         brod_y = NitBroda::Y;
         for (int r = 0; r < NitBroda::B_VISINA; r++) {
             for (int k = 0; k < NitBroda::B_SIRINA; k++) {
@@ -156,21 +158,21 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
                     continue; 
                 }
 
-                double ekran_x = brod_x + (k * NitBroda::FAKTOR_SKALIRANJA);
-                double ekran_y = brod_y + (r * NitBroda::FAKTOR_SKALIRANJA);
+                int ekran_x = (int)brod_x + (k * NitBroda::FAKTOR_SKALIRANJA);
+                int ekran_y = (int)brod_y + (r * NitBroda::FAKTOR_SKALIRANJA);
 
-                sf::RectangleShape veliki_piksel(sf::Vector2f(NitBroda::FAKTOR_SKALIRANJA, NitBroda::FAKTOR_SKALIRANJA));
-                sf::Color boja_piksela;
+                int kraj_x = ekran_x + NitBroda::FAKTOR_SKALIRANJA - 1;
+                int kraj_y = ekran_y + NitBroda::FAKTOR_SKALIRANJA - 1;
+
+                const unsigned char* boja = nullptr;
                 switch (tip_piksela) {
-                    case 1: boja_piksela = sf::Color(192, 192, 192); break; // Svetlo siva
-                    case 2: boja_piksela = sf::Color(255, 255, 255); break; // Bela
-                    case 3: boja_piksela = sf::Color(0, 191, 255); break; // Plava
-                    case 4: boja_piksela = sf::Color(128, 128, 128); break; // tamno siva
-                    default: continue;
+                    case 1: boja = svetlo_siva; break;
+                    case 2: boja = bela; break;
+                    case 3: boja = plava; break;
+                    case 4: boja = tamno_siva; break;
+                    default: continue; 
                 }
-                veliki_piksel.setPosition(ekran_x, ekran_y);
-                veliki_piksel.setFillColor(boja_piksela);
-                if (!won) window.draw(veliki_piksel);
+                if (!won) platno.draw_rectangle(ekran_x, ekran_y, kraj_x, kraj_y, boja);
             }
         }
 
@@ -182,13 +184,11 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
             double y_i = meci_y[i];
             for (int r = 0; r < NitMetaka::M_VISINA; r++) {
                 for (int k = 0; k < NitMetaka::M_SIRINA; k++) {
-                    double ekran_x = x_i + (k * NitMetaka::FAKTOR_SKALIRANJA);
-                    double ekran_y = y_i + (r * NitMetaka::FAKTOR_SKALIRANJA);
-                    sf::Color boja_piksela = sf::Color(221, 31, 19);
-                    sf::RectangleShape veliki_piksel(sf::Vector2f(NitMetaka::FAKTOR_SKALIRANJA, NitMetaka::FAKTOR_SKALIRANJA));
-                    veliki_piksel.setPosition(ekran_x, ekran_y);
-                    veliki_piksel.setFillColor(boja_piksela);
-                    if (!won) window.draw(veliki_piksel);
+                    int ekran_x = (int)x_i + (k * NitMetaka::FAKTOR_SKALIRANJA);
+                    int ekran_y = (int)y_i + (r * NitMetaka::FAKTOR_SKALIRANJA);
+                    int kraj_x = ekran_x + NitMetaka::FAKTOR_SKALIRANJA - 1;
+                    int kraj_y = ekran_y + NitMetaka::FAKTOR_SKALIRANJA - 1;
+                    if (!won) platno.draw_rectangle(ekran_x, ekran_y, kraj_x, kraj_y, narandzasta);
                 }
             }
         }
@@ -216,31 +216,32 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
                     if (tip_piksela == 0) {
                         continue; 
                     }
-                    double ekran_x = ast_x + (k * NitAsteroida::FAKTOR_SKALIRANJA);
-                    double ekran_y = ast_y + (r * NitAsteroida::FAKTOR_SKALIRANJA);
-                    sf::Color boja_piksela;
+                    int ekran_x = (int)ast_x + (k * NitAsteroida::FAKTOR_SKALIRANJA);
+                    int ekran_y = (int)ast_y + (r * NitAsteroida::FAKTOR_SKALIRANJA);
+                    int kraj_x = ekran_x + NitAsteroida::FAKTOR_SKALIRANJA - 1;
+                    int kraj_y = ekran_y + NitAsteroida::FAKTOR_SKALIRANJA - 1;
+
+                    const unsigned char* boja = nullptr;
                     
                     switch (tip_piksela) {
-                        case 1: boja_piksela = sf::Color(121, 91, 54); break;  // tamno braon
-                        case 2: boja_piksela = sf::Color(161, 133, 98); break; // svetlo braon
-                        case 3: boja_piksela = sf::Color(208, 192, 170); break;  // krem
-                        default: continue;
+                        case 1: boja = tamno_braon; break;
+                        case 2: boja = svetlo_braon; break;
+                        case 3: boja = krem; break;
+                        default: continue; 
                     }
-                    sf::RectangleShape veliki_piksel(sf::Vector2f(NitAsteroida::FAKTOR_SKALIRANJA, NitAsteroida::FAKTOR_SKALIRANJA));
-                    veliki_piksel.setPosition(ekran_x, ekran_y);
-                    veliki_piksel.setFillColor(boja_piksela);
-                    if (!won) window.draw(veliki_piksel);
+                    if (!won) platno.draw_rectangle(ekran_x, ekran_y, kraj_x, kraj_y, boja);
                 }
             }
         }
 
         //score
         std::string tekst_score = "Score: " + std::to_string(skor);
-        tekst_objekat.setString(tekst_score);
-        if (!won) window.draw(tekst_objekat);
+        if (!won) {
+            platno.draw_text(10, 10, tekst_score.c_str(), bela, 0, 1.0f, 20);
+        }
         
-        window.display();
-        
+        window.display(platno);
+        window.wait(1);
         // nakon svih iscrtavanja
         
         if (!petlja_radi) break;
@@ -250,21 +251,28 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
     }
 
     std::string tekst_za_ispis;
-    sf::Color boja;
+    const unsigned char* boja = nullptr;
     if (asteroid_na_dnu)
     {
         tekst_za_ispis = "Game over";
-        boja = sf::Color (255, 0, 0);
+        boja = crvena;
     }
     else if (won)
     {
         tekst_za_ispis = "You won";
-        boja = sf::Color (0, 255, 0);
+        boja = zelena;
     }
     if (!tekst_za_ispis.empty())
     {
-        ispisKrajIgre(window,font, tekst_za_ispis, boja);
-        window.display();
+        const int fontSize = 113;
+        CImg<unsigned char> imgtext;
+        const unsigned char b = 1;
+        imgtext.draw_text(0,0,tekst_za_ispis.c_str(),&b,0,1,fontSize);
+        int x = (Postavke::SIRINA_EKRANA - imgtext.width()) / 2;
+        int y = (Postavke::VISINA_EKRANA - imgtext.height()) / 2;
+        
+        platno.draw_text(x, y, tekst_za_ispis.c_str(), boja, 0, 1.0f, fontSize);
+        window.display(platno);
     }
 
     brod.stop();
@@ -278,15 +286,11 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
     {
         while (true) 
         {
-            while (window.pollEvent(event)) {
-            if (event.type == sf::Event::Closed)
-                window.close();
+            if (window.is_closed() || window.is_keyESC()) {
+                window.close(); 
+                break;
             }
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape) || !window.isOpen()) 
-            {
-                break; 
-            }
-            sf::sleep(sf::milliseconds(30));
+            cimg::wait(30);
         }
     }
     
@@ -296,12 +300,3 @@ Iscrtavanje::~Iscrtavanje() {
     delete[] asteroidi;
 }
 
-void Iscrtavanje::ispisKrajIgre(sf::RenderWindow& window, sf::Font& font, std::string poruka, sf::Color boja) {
-    sf::Text tekst(poruka, font, 75); 
-    tekst.setFillColor(boja);
-    sf::FloatRect granice_teksta = tekst.getLocalBounds();
-    float x = (Postavke::SIRINA_EKRANA - granice_teksta.width) / 2.f - granice_teksta.left;
-    float y = (Postavke::VISINA_EKRANA - granice_teksta.height) / 2.f - granice_teksta.top;
-    tekst.setPosition(x, y);
-    window.draw(tekst);
-}

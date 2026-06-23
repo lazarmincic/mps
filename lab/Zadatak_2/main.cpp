@@ -1,7 +1,6 @@
 #include <iostream>
 #include <string.h>
 #include "Iscrtavanje.hpp"
-#include <SFML/Graphics.hpp>
 
 
 int main(int argc, char** argv )
