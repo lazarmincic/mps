@@ -19,7 +19,7 @@ void Merac::zabeleziFrejm() {
     if (izm_vreme >= 1.0) {
         std::stringstream ss;
         ss << "[" << ime_niti << "] FPS: " << brojac_frejmova << "\n";
-        bezbedanIspis(ss.str());
+        //bezbedanIspis(ss.str());
         brojac_frejmova = 0;
         poslednji_ispis = trenutno_vreme;
     }

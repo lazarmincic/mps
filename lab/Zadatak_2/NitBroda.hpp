@@ -6,7 +6,7 @@
 
 class NitMetaka;
 
-struct Taster {
+struct Taster{
     bool levo;
     bool desno;
     bool pucaj;
@@ -21,8 +21,9 @@ private:
     static void* statickiMost(void* arg);
     void petljaFizike();
     NitMetaka* meci;
-    const int fps = 60;
-    Taster kontrole;
+    const int fps = 200;
+    bool ima_metaka = false;
+    Taster taster;
 public:
     static const int B_VISINA = 12;
     static const int B_SIRINA = 10;
@@ -52,7 +53,8 @@ public:
 
     void stop();
 
-    double uzmi_poziciju_x_prosledi_radi(bool program_radi, Taster kontrol) ;
+    double uzmi_poziciju_x_prosledi_radi(bool program_radi, Taster taster) ;
     void proslediMetke(NitMetaka* meci);
+
 };
 

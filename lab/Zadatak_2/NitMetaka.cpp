@@ -154,6 +154,7 @@ void NitMetaka::petljaFizike() {
         broj_unistenih = 0;
 
         // nit za iscrtavanje zastita
+        if (!radi_lok) break;
         pthread_mutex_lock(&muteks_crtanje);
         skor = skor_lok;
         broj_metaka_crtanje = broj_metaka_lok;
@@ -164,7 +165,6 @@ void NitMetaka::petljaFizike() {
         radi_lok = radi;
         broj_asteroida = broj_asteroida_lok;
         pthread_mutex_unlock(&muteks_crtanje);
-        if (!radi_lok) break;
 
         // nit broda zastita
         pthread_mutex_lock(&muteks_fizika);

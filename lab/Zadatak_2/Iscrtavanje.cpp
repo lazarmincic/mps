@@ -1,11 +1,12 @@
-#include <opencv2/opencv.hpp>
+
 #include "Iscrtavanje.hpp"
 #include "Merac.hpp"
 #include "NitAsteroida.hpp"
 #include <random>
 #include <iostream>
+#include "CImg.h"
 
-using namespace cv;
+using namespace cimg_library;
 
 Iscrtavanje::Iscrtavanje(int pocetni_broj, bool hard_mode) {
     pocetni_broj_asteroida = pocetni_broj;
@@ -38,12 +39,6 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
 
     tabla_crtanje.broj_asteroida = pocetni_broj_asteroida;
     tabla_sudar.broj_asteroida = pocetni_broj_asteroida;
-
-    namedWindow(ime_prozora, WINDOW_AUTOSIZE | WINDOW_GUI_NORMAL);
-    Mat matrica_ekrana = Mat::zeros(Postavke::VISINA_EKRANA, Postavke::SIRINA_EKRANA, CV_8UC3);
-    imshow(ime_prozora, matrica_ekrana);
-    waitKey(5);
-    int taster = -1;
 
     meci.prosledi_max_asteroida(pocetni_broj_asteroida, max_asteroida, is_hard_mode, asteroidi);
     brod.start();
@@ -90,25 +85,23 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
     Merac grafika_fps("GRAFIKA");
     std::chrono::time_point staro_vreme = std::chrono::high_resolution_clock::now();
 
-    const Scalar bela = { 255, 255, 255 };
-    const Scalar svetlo_siva = { 192, 192, 192 };
-    const Scalar plava = { 255, 191, 0 };
-    const Scalar tamno_siva = { 128, 128, 128 };
-    const Scalar narandzasta = { 19, 31, 221 };
-    const Scalar tamno_braon = { 54, 91, 121 };
-    const Scalar svetlo_braon = { 98, 133, 161 };
-    const Scalar krem = { 170, 192, 208 };
-    const Scalar crvena = { 0, 0, 255 };
-    const Scalar zelena = { 0, 255, 0 };
+    const unsigned char bela[] = { 255, 255, 255 };
+    const unsigned char svetlo_siva[] = { 192, 192, 192 };
+    const unsigned char plava[] = { 0, 191, 255 };
+    const unsigned char tamno_siva[] = { 128, 128, 128 };
+    const unsigned char narandzasta[] = { 221, 31, 19 };
+    const unsigned char tamno_braon[] = { 121, 91, 54 };
+    const unsigned char svetlo_braon[] = { 161, 133, 98 };
+    const unsigned char krem[] = { 208, 192, 170 };
+    const unsigned char crvena[] = {255, 0, 0};
+    const unsigned char zelena[] = {0, 255, 0};
 
-    Taster kontrole;
-    kontrole.levo = false;
-    kontrole.desno = false;
-    kontrole.pucaj = false;
-
-    std::chrono::steady_clock::time_point poslednje_levo;
-    std::chrono::steady_clock::time_point poslednje_desno;
-    std::chrono::steady_clock::time_point poslednje_pucaj;
+    CImg<unsigned char> platno(Postavke::SIRINA_EKRANA, Postavke::VISINA_EKRANA, 1, 3, 0);
+    CImgDisplay window(platno, ime_prozora);
+    Taster taster;
+    taster.levo = false;
+    taster.desno = false;
+    taster.pucaj = false;
 
     while (true) {
         std::chrono::time_point trenutno_vreme = std::chrono::high_resolution_clock::now();
@@ -116,62 +109,8 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
         double dt = proteklo.count(); //delta vreme 
         staro_vreme = trenutno_vreme;
 
-        // uslov za izlazak
-        taster = pollKey();
-        std::chrono::steady_clock::time_point vreme_pritiska = std::chrono::steady_clock::now();
-
-        if (taster == 27 || (getWindowProperty(ime_prozora, WND_PROP_VISIBLE) < 1)) {
-            petlja_radi = false;
-        }
-        if (skor >= Postavke::WIN_POINTS)
-        {
-            if (won){
-                petlja_radi = false;
-            }
-            won = true;
-        }
-        if (asteroid_na_dnu)
-        {
-            petlja_radi = false;
-        }
-        
-        // kontrole
-        int taster_maskiran = taster & 0xFF;
-        if (taster_maskiran == 'a' || taster_maskiran == 'A' || taster == 81 || taster == 65361) {
-            kontrole.levo = true;
-            poslednje_levo = vreme_pritiska;
-        }
-        if (taster_maskiran == 'd' || taster_maskiran == 'D' || taster == 83 || taster == 65363) {
-            kontrole.desno = true;
-            poslednje_desno = vreme_pritiska;
-        } 
-        if (taster_maskiran == 'w' || taster_maskiran == 'W' || taster == 32)
-        {
-            kontrole.pucaj = true;
-            poslednje_pucaj = vreme_pritiska;
-        }
-        
-        const int LIMIT_AMORTIZACIJE_MS = 40;
-        if (kontrole.levo && 
-        std::chrono::duration_cast<std::chrono::milliseconds>(vreme_pritiska - poslednje_levo).count()
-         > LIMIT_AMORTIZACIJE_MS) {
-        kontrole.levo = false;
-        }
-        if (kontrole.desno && 
-        std::chrono::duration_cast<std::chrono::milliseconds>(vreme_pritiska - poslednje_desno).count()
-         > LIMIT_AMORTIZACIJE_MS) {
-        kontrole.desno = false;
-        }
-        if (kontrole.pucaj && 
-        std::chrono::duration_cast<std::chrono::milliseconds>(vreme_pritiska - poslednje_pucaj).count()
-         > LIMIT_AMORTIZACIJE_MS) {
-        kontrole.pucaj = false;
-        }
-
         // pozadina
-        if(!won) {
-            matrica_ekrana = Mat::zeros(Postavke::VISINA_EKRANA, Postavke::SIRINA_EKRANA, CV_8UC3);
-        }
+        platno.fill(0);
 
         // zvezde
         int radijus = 2.0;
@@ -182,14 +121,16 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
                 zvezde[i].y = 0;
                 zvezde[i].x = dist_sirina(engine);
             }
-            if (!won) {
-                circle(matrica_ekrana, Point((int)zvezde[i].x, (int)zvezde[i].y), radijus, bela, FILLED);
-            }
+            platno.draw_circle((int)zvezde[i].x, (int)zvezde[i].y, radijus, bela);
         }
 
+        taster.levo = window.is_keyARROWLEFT() || window.is_keyA();
+        taster.desno = window.is_keyARROWRIGHT() || window.is_keyD();
+        taster.pucaj = window.is_keySPACE() || window.is_keyW();
+        
         // brod
         double brod_x, brod_y; // lokalne prom
-        brod_x = brod.uzmi_poziciju_x_prosledi_radi(petlja_radi, kontrole);
+        brod_x = brod.uzmi_poziciju_x_prosledi_radi(petlja_radi, taster);
         brod_y = NitBroda::Y;
         for (int r = 0; r < NitBroda::B_VISINA; r++) {
             for (int k = 0; k < NitBroda::B_SIRINA; k++) {
@@ -203,7 +144,10 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
                 int ekran_x = (int)brod_x + (k * NitBroda::FAKTOR_SKALIRANJA);
                 int ekran_y = (int)brod_y + (r * NitBroda::FAKTOR_SKALIRANJA);
 
-                Scalar boja;
+                int kraj_x = ekran_x + NitBroda::FAKTOR_SKALIRANJA - 1;
+                int kraj_y = ekran_y + NitBroda::FAKTOR_SKALIRANJA - 1;
+
+                const unsigned char* boja = nullptr;
                 switch (tip_piksela) {
                     case 1: boja = svetlo_siva; break;
                     case 2: boja = bela; break;
@@ -211,10 +155,7 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
                     case 4: boja = tamno_siva; break;
                     default: continue; 
                 }
-                if (!won){
-                    Rect veliki_piksel(ekran_x, ekran_y, NitBroda::FAKTOR_SKALIRANJA, NitBroda::FAKTOR_SKALIRANJA);
-                    rectangle(matrica_ekrana, veliki_piksel, boja, FILLED);
-                }
+                platno.draw_rectangle(ekran_x, ekran_y, kraj_x, kraj_y, boja);
             }
         }
 
@@ -228,10 +169,9 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
                 for (int k = 0; k < NitMetaka::M_SIRINA; k++) {
                     int ekran_x = (int)x_i + (k * NitMetaka::FAKTOR_SKALIRANJA);
                     int ekran_y = (int)y_i + (r * NitMetaka::FAKTOR_SKALIRANJA);
-                    if (!won) {
-                    Rect veliki_piksel(ekran_x, ekran_y, NitAsteroida::FAKTOR_SKALIRANJA, NitAsteroida::FAKTOR_SKALIRANJA);
-                    rectangle(matrica_ekrana, veliki_piksel, narandzasta, FILLED);
-                    }
+                    int kraj_x = ekran_x + NitMetaka::FAKTOR_SKALIRANJA - 1;
+                    int kraj_y = ekran_y + NitMetaka::FAKTOR_SKALIRANJA - 1;
+                    platno.draw_rectangle(ekran_x, ekran_y, kraj_x, kraj_y, narandzasta);
                 }
             }
         }
@@ -261,8 +201,10 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
                     }
                     int ekran_x = (int)ast_x + (k * NitAsteroida::FAKTOR_SKALIRANJA);
                     int ekran_y = (int)ast_y + (r * NitAsteroida::FAKTOR_SKALIRANJA);
+                    int kraj_x = ekran_x + NitAsteroida::FAKTOR_SKALIRANJA - 1;
+                    int kraj_y = ekran_y + NitAsteroida::FAKTOR_SKALIRANJA - 1;
 
-                    Scalar boja;
+                    const unsigned char* boja = nullptr;
                     
                     switch (tip_piksela) {
                         case 1: boja = tamno_braon; break;
@@ -270,36 +212,43 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
                         case 3: boja = krem; break;
                         default: continue; 
                     }
-                    if (!won) {
-                        Rect veliki_piksel(ekran_x, ekran_y, NitAsteroida::FAKTOR_SKALIRANJA, NitAsteroida::FAKTOR_SKALIRANJA);
-                        rectangle(matrica_ekrana, veliki_piksel, boja, FILLED);
-                    }
+                    platno.draw_rectangle(ekran_x, ekran_y, kraj_x, kraj_y, boja);
                 }
             }
         }
 
         //score
         std::string tekst_score = "Score: " + std::to_string(skor);
-        int font = FONT_HERSHEY_SIMPLEX;
-        double skala = 0.55;
-        int debljina = 1;
-        int baseline = 0;
-        Size velicina_teksta = getTextSize(tekst_score, font, skala, debljina, &baseline);
-        Point pozicija(10, velicina_teksta.height + 10);
-        if (!won) {
-            putText(matrica_ekrana, tekst_score, pozicija, font, skala, bela, debljina, LINE_AA);
-        }
+        platno.draw_text(10, 10, tekst_score.c_str(), bela, 0, 1.0f, 20);
         
-        imshow(ime_prozora, matrica_ekrana);
+        
+        window.display(platno);
+        //window.wait(1);
         // nakon svih iscrtavanja
         
         if (!petlja_radi) break;
+
+        // uslov za izlazak
+        if (window.is_closed() || window.is_keyESC()) {
+            petlja_radi = false;
+            window.close(); 
+        }
+        if (skor >= Postavke::WIN_POINTS)
+        {
+            petlja_radi = false;
+            won = true;
+        }
+        if (asteroid_na_dnu)
+        {
+            petlja_radi = false;
+        }
         
         grafika_fps.zabeleziFrejm();
         
     }
+
     std::string tekst_za_ispis;
-    Scalar boja;
+    const unsigned char* boja = nullptr;
     if (asteroid_na_dnu)
     {
         tekst_za_ispis = "Game over";
@@ -310,40 +259,65 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
         tekst_za_ispis = "You won";
         boja = zelena;
     }
-    if (!tekst_za_ispis.empty())
-    {
-        int font = FONT_HERSHEY_COMPLEX;
-        double skala = 3.0;    
-        int debljina = 4;      
-        int baseline = 0;      
-        Size velicina_teksta = getTextSize(tekst_za_ispis, font, skala, debljina, &baseline);
-        int x = (Postavke::SIRINA_EKRANA - velicina_teksta.width) / 2;
-        int y = (Postavke::VISINA_EKRANA + velicina_teksta.height) / 2;
-        putText(matrica_ekrana, tekst_za_ispis, Point(x, y), font, skala, boja, debljina, LINE_AA);  //glatke ivice
-        imshow(ime_prozora, matrica_ekrana);
-    }
 
-    brod.stop();
-    for (int i = 0; i < max_asteroida; i++) {
-        asteroidi[i].stop();
-    }
-    meci.stop();
-    delete[] zvezde;
-
+    bool joined = false;
+    
     if (!tekst_za_ispis.empty())
     {
         while (true) 
         {
-            int taster = waitKey(30); // 30 fps
-            if (getWindowProperty(ime_prozora, WND_PROP_VISIBLE) < 1 || taster==27) 
-            {
-                break; 
+            // dt
+            std::chrono::time_point trenutno_vreme = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double> proteklo = trenutno_vreme - staro_vreme;
+            double dt = proteklo.count(); //delta vreme 
+            staro_vreme = trenutno_vreme;
+            if (window.is_closed() || window.is_keyESC()) {
+                window.close(); 
+                break;
+            }
+            // pozadina
+            platno.fill(0);
+
+            // zvezde
+            int radijus = 2.0;
+            for (int i = 0; i < BROJ_ZVEZDA; i++) {
+                zvezde[i].y += BRZINA_ZVEZDE_PO_S * dt;
+                if (zvezde[i].y >= Postavke::VISINA_EKRANA) {
+                    zvezde[i].y = 0;
+                    zvezde[i].x = dist_sirina(engine);
+                }
+                platno.draw_circle((int)zvezde[i].x, (int)zvezde[i].y, radijus, bela);
+            }
+        
+            // tekst
+            const int fontSize = 113;
+            CImg<unsigned char> imgtext;
+            const unsigned char b = 1;
+            imgtext.draw_text(0,0,tekst_za_ispis.c_str(),&b,0,1,fontSize);
+            int x = (Postavke::SIRINA_EKRANA - imgtext.width()) / 2;
+            int y = (Postavke::VISINA_EKRANA - imgtext.height()) / 2;
+
+            // crtaj
+            platno.draw_text(x, y, tekst_za_ispis.c_str(), boja, 0, 1.0f, fontSize);
+            window.display(platno);
+            if (!joined){
+                brod.stop();
+                for (int i = 0; i < max_asteroida; i++) {
+                    asteroidi[i].stop();
+                }
+                meci.stop();
+                joined = true;
+            }
+            else {
+                window.wait(1);
             }
         }
     }
-    destroyAllWindows();
+    delete[] zvezde;
+    
 }
 
 Iscrtavanje::~Iscrtavanje() {
     delete[] asteroidi;
 }
+

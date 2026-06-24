@@ -68,22 +68,6 @@ void NitAsteroida::petljaFizike() {
         }
         staro_vreme = std::chrono::high_resolution_clock::now();
         pthread_mutex_unlock(&muteks_aktivacije);
-    
-        // provera unistenja
-        pthread_mutex_lock(&tabla_sudar->muteks);
-        if (tabla_sudar->unisten[i] == true) {
-            y = 0;
-            x = dist_sirina(engine);
-            tabla_sudar->unisten[i] = false;
-        }
-        if (hard_mode && Postavke::REZIM == SAMO_BROJ) {
-            broj_asteroida = tabla_sudar->broj_asteroida;
-        }
-        else if (hard_mode && Postavke::REZIM == SAMO_BRZINA) {
-            skor = tabla_sudar->skor;
-        }
-        pthread_mutex_unlock(&tabla_sudar->muteks);
-        if (!radi) break; 
 
         // fizika
         const double FAKTOR_OPADANJA = 0.2; // eksp.
@@ -117,17 +101,29 @@ void NitAsteroida::petljaFizike() {
             y = Postavke::VISINA_EKRANA - A_VISINA*FAKTOR_SKALIRANJA;
         }
 
+                // provera unistenja
+        pthread_mutex_lock(&tabla_sudar->muteks);
+        if (tabla_sudar->unisten[i] == true) {
+            y = 0;
+            x = dist_sirina(engine);
+            tabla_sudar->unisten[i] = false;
+        }
+        if (hard_mode && Postavke::REZIM == SAMO_BROJ) {
+            broj_asteroida = tabla_sudar->broj_asteroida;
+        }
+        else if (hard_mode && Postavke::REZIM == SAMO_BRZINA) {
+            skor = tabla_sudar->skor;
+        }
+        tabla_sudar->x[i] = x;
+        tabla_sudar->y[i] = y;
+        pthread_mutex_unlock(&tabla_sudar->muteks);
+
+        if (!radi) break; 
         pthread_mutex_lock(&tabla_crtanje->muteks);
         tabla_crtanje->x[i] = x;
         tabla_crtanje->y[i] = y;
         radi = tabla_crtanje->program_radi;
         pthread_mutex_unlock(&tabla_crtanje->muteks);
-        
-
-        pthread_mutex_lock(&tabla_sudar->muteks);
-        tabla_sudar->x[i] = x;
-        tabla_sudar->y[i] = y;
-        pthread_mutex_unlock(&tabla_sudar->muteks);
         
         std::chrono::time_point vreme_nakon_fizike = std::chrono::high_resolution_clock::now();
         long potroseno_vreme = std::chrono::duration_cast<std::chrono::nanoseconds>(vreme_nakon_fizike - trenutno_vreme).count();
