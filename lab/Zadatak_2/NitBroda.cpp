@@ -17,7 +17,7 @@ void NitBroda::petljaFizike() {
     double x_lok_kop;
     x_lok_kop = Postavke::SIRINA_EKRANA / 2;
     const int BROD_SIRINA_EKRAN = B_SIRINA*FAKTOR_SKALIRANJA;
-    double BRZINA_PO_S = Postavke::SIRINA_EKRANA/(double)3.5; // 0.03
+    double BRZINA_PO_S = Postavke::SIRINA_EKRANA; // 0.03
     const long FRAME_TIME_NS = 1000000000/fps;
     bool radi_lok = true;
     std::chrono::time_point staro_vreme = std::chrono::high_resolution_clock::now();

@@ -42,7 +42,8 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
     namedWindow(ime_prozora, WINDOW_AUTOSIZE | WINDOW_GUI_NORMAL);
     Mat matrica_ekrana = Mat::zeros(Postavke::VISINA_EKRANA, Postavke::SIRINA_EKRANA, CV_8UC3);
     imshow(ime_prozora, matrica_ekrana);
-    int taster = waitKey(1);
+    waitKey(5);
+    int taster = -1;
 
     meci.prosledi_max_asteroida(pocetni_broj_asteroida, max_asteroida, is_hard_mode, asteroidi);
     brod.start();
@@ -105,6 +106,9 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
     kontrole.desno = false;
     kontrole.pucaj = false;
 
+    std::chrono::steady_clock::time_point poslednje_levo;
+    std::chrono::steady_clock::time_point poslednje_desno;
+    std::chrono::steady_clock::time_point poslednje_pucaj;
 
     while (true) {
         std::chrono::time_point trenutno_vreme = std::chrono::high_resolution_clock::now();
@@ -114,6 +118,8 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
 
         // uslov za izlazak
         taster = pollKey();
+        std::chrono::steady_clock::time_point vreme_pritiska = std::chrono::steady_clock::now();
+
         if (taster == 27 || (getWindowProperty(ime_prozora, WND_PROP_VISIBLE) < 1)) {
             petlja_radi = false;
         }
@@ -127,7 +133,40 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
         if (asteroid_na_dnu)
         {
             petlja_radi = false;
-        }  
+        }
+        
+        // kontrole
+        int taster_maskiran = taster & 0xFF;
+        if (taster_maskiran == 'a' || taster_maskiran == 'A' || taster == 81 || taster == 65361) {
+            kontrole.levo = true;
+            poslednje_levo = vreme_pritiska;
+        }
+        if (taster_maskiran == 'd' || taster_maskiran == 'D' || taster == 83 || taster == 65363) {
+            kontrole.desno = true;
+            poslednje_desno = vreme_pritiska;
+        } 
+        if (taster_maskiran == 'w' || taster_maskiran == 'W' || taster == 32)
+        {
+            kontrole.pucaj = true;
+            poslednje_pucaj = vreme_pritiska;
+        }
+        
+        const int LIMIT_AMORTIZACIJE_MS = 40;
+        if (kontrole.levo && 
+        std::chrono::duration_cast<std::chrono::milliseconds>(vreme_pritiska - poslednje_levo).count()
+         > LIMIT_AMORTIZACIJE_MS) {
+        kontrole.levo = false;
+        }
+        if (kontrole.desno && 
+        std::chrono::duration_cast<std::chrono::milliseconds>(vreme_pritiska - poslednje_desno).count()
+         > LIMIT_AMORTIZACIJE_MS) {
+        kontrole.desno = false;
+        }
+        if (kontrole.pucaj && 
+        std::chrono::duration_cast<std::chrono::milliseconds>(vreme_pritiska - poslednje_pucaj).count()
+         > LIMIT_AMORTIZACIJE_MS) {
+        kontrole.pucaj = false;
+        }
 
         // pozadina
         if(!won) {
@@ -147,9 +186,6 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
                 circle(matrica_ekrana, Point((int)zvezde[i].x, (int)zvezde[i].y), radijus, bela, FILLED);
             }
         }
-        
-        // kontrole
-        // to do..
 
         // brod
         double brod_x, brod_y; // lokalne prom
