@@ -3,6 +3,7 @@
 #include "NitBroda.hpp"
 #include "NitMetaka.hpp"
 #include <string>
+#include <unordered_map>
 
 class NitAsteroida;
 

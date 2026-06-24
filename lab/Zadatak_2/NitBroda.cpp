@@ -1,4 +1,3 @@
-
 #include "NitBroda.hpp"
 #include "Merac.hpp"
 #include <chrono>
@@ -24,11 +23,12 @@ void NitBroda::petljaFizike() {
     std::chrono::time_point staro_vreme = std::chrono::high_resolution_clock::now();
     std::chrono::steady_clock::time_point vreme_poslednjeg_metka;
     const int COOLDOWN_METKA_MS = 112;
-    Taster taster_lok;
-    taster_lok.desno = false;
-    taster_lok.levo = false;
-    taster_lok.pucaj = false;
 
+    Taster kontrole_lok;
+    kontrole_lok.levo = false; 
+    kontrole_lok.desno = false; 
+    kontrole_lok.pucaj = false;
+    
     while (true) {
         if (radi_lok == false) break;
         std::chrono::time_point trenutno_vreme = std::chrono::high_resolution_clock::now();
@@ -39,21 +39,21 @@ void NitBroda::petljaFizike() {
         if (!radi_lok) break;
 
         double brzina_broda =  dt*BRZINA_PO_S;
-        if (taster_lok.levo) { 
+        if (kontrole_lok.levo) { 
             if (x_lok_kop - brzina_broda >= 0) {
                 x_lok_kop -= brzina_broda;
             } else {
                 x_lok_kop = 0; 
             }
         }
-        if (taster_lok.desno) { 
+        if (kontrole_lok.desno) { 
             if (x_lok_kop + brzina_broda <= Postavke::SIRINA_EKRANA - BROD_SIRINA_EKRAN) {
                 x_lok_kop += brzina_broda;
             } else {
                 x_lok_kop = Postavke::SIRINA_EKRANA - BROD_SIRINA_EKRAN;
             }
         }
-        if (taster_lok.pucaj)
+        if (kontrole_lok.pucaj)
         {
             std::chrono::steady_clock::time_point vreme_tren_metka = std::chrono::steady_clock::now();
             long proslo_ms = std::chrono::duration_cast<std::chrono::milliseconds>(vreme_tren_metka - vreme_poslednjeg_metka).count();
@@ -61,13 +61,13 @@ void NitBroda::petljaFizike() {
                 meci->napraviNovi(x_lok_kop);
                 vreme_poslednjeg_metka = vreme_tren_metka;
             }
-            taster_lok.pucaj = false;
+            kontrole_lok.pucaj = false;
         }
 
         pthread_mutex_lock(&lock);
         x = x_lok_kop;
         radi_lok = radi;
-        taster_lok = taster;
+        kontrole_lok = kontrole;
         pthread_mutex_unlock(&lock);
 
         std::chrono::time_point vreme_nakon_fizike = std::chrono::high_resolution_clock::now();
@@ -85,6 +85,7 @@ void NitBroda::petljaFizike() {
         brod_fps.zabeleziFrejm();
         
     }
+    
 }
 
 NitBroda::NitBroda() {
@@ -111,12 +112,12 @@ void NitBroda::stop() {
 }
 
 
-double NitBroda::uzmi_poziciju_x_prosledi_radi(bool program_radi, Taster taster) { // zove nit 0 
+double NitBroda::uzmi_poziciju_x_prosledi_radi(bool program_radi, Taster kontrol) { // zove nit 0 
     double ret;
     pthread_mutex_lock(&lock);
     ret = x; 
     radi = program_radi;
-    this->taster = taster;
+    kontrole = kontrol;
     pthread_mutex_unlock(&lock);
     return ret;
 }
@@ -124,4 +125,3 @@ double NitBroda::uzmi_poziciju_x_prosledi_radi(bool program_radi, Taster taster)
 void NitBroda::proslediMetke(NitMetaka* meci){
     this->meci = meci;
 }
-
