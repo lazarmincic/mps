@@ -40,7 +40,7 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
     tabla_crtanje.broj_asteroida = pocetni_broj_asteroida;
     tabla_sudar.broj_asteroida = pocetni_broj_asteroida;
 
-    meci.prosledi_max_asteroida(pocetni_broj_asteroida, max_asteroida, is_hard_mode, asteroidi);
+    meci.inicijalizuj(pocetni_broj_asteroida, max_asteroida, is_hard_mode, asteroidi);
     brod.start();
     
     for (int i = 0; i < max_asteroida; i++) {
@@ -59,7 +59,7 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
         double x;
         double y;
     };
-    Zvezda* zvezde = new Zvezda[BROJ_ZVEZDA];
+    Zvezda zvezde [BROJ_ZVEZDA];
     for (int i = 0; i < BROJ_ZVEZDA; i++) {
         zvezde[i].x = dist_sirina(engine);
         zvezde[i].y = dist_visina(engine);
@@ -130,7 +130,7 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
         
         // brod
         double brod_x, brod_y; // lokalne prom
-        brod_x = brod.uzmi_poziciju_x_prosledi_radi(petlja_radi, taster);
+        brod_x = brod.pristupi_deljenoj_mem(petlja_radi, taster);
         brod_y = NitBroda::Y;
         for (int r = 0; r < NitBroda::B_VISINA; r++) {
             for (int k = 0; k < NitBroda::B_SIRINA; k++) {
@@ -160,7 +160,7 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
         }
 
         //meci
-        meci.uzmiPoziciju(meci_x, meci_y, broj_metaka, skor, petlja_radi, broj_asteroida);
+        meci.pristupi_deljenoj_iz_gl(meci_x, meci_y, broj_metaka, skor, petlja_radi, broj_asteroida);
         for (int i = 0;i < broj_metaka; i++)
         {
             double x_i = meci_x[i];
@@ -259,11 +259,13 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
         tekst_za_ispis = "You won";
         boja = zelena;
     }
-
-    bool joined = false;
     
     if (!tekst_za_ispis.empty())
     {
+        for (int i = 0; i < BROJ_ZVEZDA; i++) {
+            zvezde[i].x = dist_sirina(engine);
+            zvezde[i].y = dist_visina(engine);
+        }
         while (true) 
         {
             // dt
@@ -300,20 +302,15 @@ void Iscrtavanje::pokreniPetljuPrikaza() {
             // crtaj
             platno.draw_text(x, y, tekst_za_ispis.c_str(), boja, 0, 1.0f, fontSize);
             window.display(platno);
-            if (!joined){
-                brod.stop();
-                for (int i = 0; i < max_asteroida; i++) {
-                    asteroidi[i].stop();
-                }
-                meci.stop();
-                joined = true;
-            }
-            else {
-                window.wait(1);
-            }
+            window.wait(1);
         }
     }
-    delete[] zvezde;
+
+    brod.stop();
+    for (int i = 0; i < max_asteroida; i++) {
+        asteroidi[i].stop();
+    }
+    meci.stop();
     
 }
 

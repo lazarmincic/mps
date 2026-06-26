@@ -39,10 +39,10 @@ public:
     
     NitMetaka();
     ~NitMetaka();
-    void uzmiPoziciju(double x_out[], double y_out [], int& broj, int& skor_out, int radi_in, int& broj_ast_out);
+    void pristupi_deljenoj_iz_gl(double x_out[], double y_out [], int& broj, int& skor_out, int radi_in, int& broj_ast_out);
     void napraviNovi(double x_brod);
     void start();
     void stop();
     void proslediTablu(PozicijeSvih* tabla_sudar);
-    void prosledi_max_asteroida (int pa, int ma, bool hard, NitAsteroida* asteroidi);
+    void inicijalizuj (int pa, int ma, bool hard, NitAsteroida* asteroidi);
 };

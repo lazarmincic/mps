@@ -11,6 +11,6 @@ public:
     static const int VISINA_EKRANA = 600;
     static const int LIMIT_ASTEROIDA = 100; 
     static const int MIN_ASTEROIDA = 2;
-    static const int WIN_POINTS = 10;
-    static const Rezim REZIM = SAMO_BROJ;
+    static const int WIN_POINTS = 10; // podes
+    static const Rezim REZIM = SAMO_BROJ; // podes
 };

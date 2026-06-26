@@ -30,7 +30,6 @@ void NitBroda::petljaFizike() {
     taster_lok.pucaj = false;
 
     while (true) {
-        if (radi_lok == false) break;
         std::chrono::time_point trenutno_vreme = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> proteklo = trenutno_vreme - staro_vreme;
         double dt = proteklo.count(); //delta vreme
@@ -109,7 +108,7 @@ void NitBroda::stop() {
 }
 
 
-double NitBroda::uzmi_poziciju_x_prosledi_radi(bool program_radi, Taster taster) { // zove nit 0 
+double NitBroda::pristupi_deljenoj_mem(bool program_radi, Taster taster) { // zove nit 0 
     double ret;
     pthread_mutex_lock(&lock);
     ret = x; 

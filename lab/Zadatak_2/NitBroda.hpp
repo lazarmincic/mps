@@ -53,7 +53,7 @@ public:
 
     void stop();
 
-    double uzmi_poziciju_x_prosledi_radi(bool program_radi, Taster taster) ;
+    double pristupi_deljenoj_mem(bool program_radi, Taster taster) ;
     void proslediMetke(NitMetaka* meci);
 
 };

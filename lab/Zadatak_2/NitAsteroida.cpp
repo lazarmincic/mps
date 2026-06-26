@@ -101,7 +101,7 @@ void NitAsteroida::petljaFizike() {
             y = Postavke::VISINA_EKRANA - A_VISINA*FAKTOR_SKALIRANJA;
         }
 
-                // provera unistenja
+        // provera unistenja
         pthread_mutex_lock(&tabla_sudar->muteks);
         if (tabla_sudar->unisten[i] == true) {
             y = 0;

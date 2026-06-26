@@ -202,7 +202,7 @@ void NitMetaka::petljaFizike() {
     }
 }
 
-void NitMetaka::uzmiPoziciju(double x_out[], double y_out [], int& broj, int& skor_out, int radi_in, int &broj_ast_out)
+void NitMetaka::pristupi_deljenoj_iz_gl(double x_out[], double y_out [], int& broj, int& skor_out, int radi_in, int &broj_ast_out)
 {
     pthread_mutex_lock(&muteks_crtanje);
     skor_out = skor;
@@ -251,7 +251,7 @@ void NitMetaka::proslediTablu(PozicijeSvih* tabla_sudar){
     this->tabla = tabla_sudar;
 }
 
-void NitMetaka::prosledi_max_asteroida (int pa,int ma, bool hard, NitAsteroida* asteroidi){
+void NitMetaka::inicijalizuj (int pa,int ma, bool hard, NitAsteroida* asteroidi){
     pocetni_broj_asteroida = pa;
     max_asteroida = ma;
     hard_mode = hard;
