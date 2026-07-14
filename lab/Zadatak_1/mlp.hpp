@@ -9,7 +9,7 @@
 #include <random>
 #include "data_loader.hpp"
 
-// Definiše strukturu neuronske mreže i obavlja matematičke operacije (množenje matrica).
+// Definiše strukturu neuronske mreže i obavlja matematičke operacije
 
 class MLP {
 public:
@@ -18,19 +18,15 @@ public:
     int output_dim = 10;    // 10 kategorija odeće
 
     int hidden_dim;         // Fiksna dimenzija
-    int num_hidden;             // broj skrivenih slojeva
+    int num_hidden;         // broj skrivenih slojeva
 
-    unsigned int trenutni_seed;
+    unsigned int trenutni_seed;  // fiksni zbog reproduk.
 
-    float learning_rate; //Kontroliše koliko je "nagli" korak popravke tezina
-    // za sve tezine u mrezi
-    // weights[0] spaja ulaz i prvi skriveni sloj
-    // weights[1] spaja prvi i drugi skriveni sloj...
-    // weights.back() spaja poslednji skriveni i izlazni sloj
+    float learning_rate; //Kontroliše koliko je nagli korak popravke tezina
     float** weights_1d;      // Niz pokazivača na blokove težina po slojevima
     int num_weights_layers;  // Broj slojeva težina (num_hidden + 1)
     std::vector<int> layer_dims;
-    // Pomoćni niz dimenzija da lakše prolazimo kroz petlju
+    // Pomoćni niz dimenzija 
     // Primer: [784, 64, 64, 10]
     float** activations_1d;
     float ** deltas_1d;
@@ -49,8 +45,8 @@ public:
     float relu(float x);
     // Softmax računa verovatnoće za ceo izlazni sloj
     void softmax(float* data, int size);
-    // za testiranje
-    float* forward_seq(float* input, int b_idx = 0);
+    
+    float* forward_thread(float* input, int b_idx = 0);
 
     void inicijalizuj_tezine() ;
 
@@ -63,7 +59,6 @@ public:
     double train_parallel(Dataset& data, int epoch, Dataset& test_data);
 
     std::pair<float, float> evaluate( Dataset& data, bool calculate_loss_flag);
-
     
 };
 

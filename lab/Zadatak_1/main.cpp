@@ -30,12 +30,11 @@ int main(int argc, char* argv[]) {
     if (test_data.n_samples == 0) return 1;
 
     // Napravi mrežu
-    // Inicijalizacija na početku (rezerviše 128 mesta)
     MLP mreza (num_hidden, hidden_dim, threads);
 
     std::cout << "Koristim nasumicni seed za ovo pokretanje: " << mreza.trenutni_seed << std::endl;
     
-    float learning_rate = 0.025f; // menjaj po potrebi
+    float learning_rate = 0.025f; // menjati po potrebi
     mreza.learning_rate = learning_rate;
 
     std::cout << "Postavljen faktor ucenja: " << learning_rate << std::endl;
@@ -43,16 +42,14 @@ int main(int argc, char* argv[]) {
     int broj_epoha = 10; // menjati po potrebi
     std::cout << "Broj epoha ucenja: " << broj_epoha << std::endl;
 
-    omp_set_nested(0); // Onemogući gnežđenje ako nije potrebno
-    omp_set_dynamic(0); // Reci OS-u da ne oduzima niti usred rada
+    omp_set_dynamic(0); // os ne oduzima niti usred rada
 
     std::vector<double> vremena;
     for (int e = 0; e < broj_epoha; ++e) {
         vremena.push_back(mreza.train_parallel(training_data, e, test_data));
     }
-    double vreme_par = std::accumulate(vremena.begin(), vremena.end(), 0.0);
-    // ukupno trajanje treninga
-
+    double vreme_par = std::accumulate(vremena.begin(), vremena.end(), 0.0); // ukupno trajanje treninga
+    
     std::cout << std::endl;
     std::cout << "===================================" << std::endl;
     std::cout << "Ukupno vreme treninga mreze:     " << vreme_par << " s" << std::endl;

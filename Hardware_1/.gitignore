@@ -1,0 +1,12 @@
+*.o
+*.d
+.vscode/
+simulator
+.clang-tidy
+/old
+log.txt
+log.log
+log.ansi
+instrukcija
+ispis.log
+output.html
